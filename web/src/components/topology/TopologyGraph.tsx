@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
@@ -10,36 +11,14 @@ import {
   type Edge,
   type NodeTypes,
   BackgroundVariant,
-  Position,
   MarkerType,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import ELK from 'elkjs/lib/elk.bundled.js'
 
-import { K8sResourceNode, NODE_DIMENSIONS } from './K8sResourceNode'
+import { K8sResourceNode } from './K8sResourceNode'
 import { GroupNode } from './GroupNode'
-import type { Topology, TopologyNode, TopologyEdge, ViewMode, GroupingMode, NodeKind } from '../../types'
-
-// ELK layout options - simpler approach matching koala-frontend
-// Relies on natural edge-based layering without partitioning
-const elk = new ELK()
-
-const elkOptions = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'RIGHT',
-  'elk.spacing.nodeNode': '12',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '25',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-  'elk.separateConnectedComponents': 'true',
-  'elk.spacing.componentComponent': '50',
-}
-
-// Reserved for future hierarchical layout
-// const elkOptionsGrouped = {
-//   'elk.algorithm': 'layered',
-//   'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-// }
+import { buildHierarchicalElkGraph, applyHierarchicalLayout } from './layout'
+import type { Topology, TopologyNode, TopologyEdge, ViewMode, GroupingMode } from '../../types'
 
 // Edge colors by type
 const EDGE_COLORS = {
@@ -89,115 +68,6 @@ function getNodeColor(kind: string): string {
   }
 }
 
-// Get group key for a node based on grouping mode
-function getGroupKey(node: TopologyNode, groupingMode: GroupingMode): string | null {
-  if (groupingMode === 'none') return null
-
-  if (groupingMode === 'namespace') {
-    return (node.data.namespace as string) || null
-  }
-
-  if (groupingMode === 'app') {
-    // Check common app labels
-    const labels = (node.data.labels as Record<string, string>) || {}
-    return labels['app.kubernetes.io/name'] || labels['app'] || labels['app.kubernetes.io/instance'] || null
-  }
-
-  return null
-}
-
-// Build nodes with grouping
-function buildNodesWithGroups(
-  topologyNodes: TopologyNode[],
-  groupingMode: GroupingMode,
-  collapsedGroups: Set<string>,
-  onToggleCollapse: (groupId: string) => void
-): { nodes: Node[]; groupMap: Map<string, string[]> } {
-  const groupMap = new Map<string, string[]>()
-  const nodes: Node[] = []
-
-  if (groupingMode === 'none') {
-    // No grouping - just convert nodes
-    for (const node of topologyNodes) {
-      nodes.push({
-        id: node.id,
-        type: 'k8sResource',
-        position: { x: 0, y: 0 },
-        data: {
-          kind: node.kind,
-          name: node.name,
-          status: node.status,
-          nodeData: node.data,
-          selected: false,
-        },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-      })
-    }
-    return { nodes, groupMap }
-  }
-
-  // Group nodes
-  for (const node of topologyNodes) {
-    const groupKey = getGroupKey(node, groupingMode)
-    if (groupKey) {
-      if (!groupMap.has(groupKey)) {
-        groupMap.set(groupKey, [])
-      }
-      groupMap.get(groupKey)!.push(node.id)
-    }
-  }
-
-  // Create group nodes
-  for (const [groupKey, memberIds] of groupMap) {
-    const groupId = `group-${groupingMode}-${groupKey}`
-    const isCollapsed = collapsedGroups.has(groupId)
-
-    nodes.push({
-      id: groupId,
-      type: 'group',
-      position: { x: 0, y: 0 },
-      data: {
-        type: groupingMode,
-        name: groupKey,
-        nodeCount: memberIds.length,
-        collapsed: isCollapsed,
-        onToggleCollapse,
-      },
-      style: isCollapsed ? {} : {
-        width: 400,
-        height: 200,
-      },
-    })
-  }
-
-  // Create resource nodes
-  for (const node of topologyNodes) {
-    const groupKey = getGroupKey(node, groupingMode)
-    const groupId = groupKey ? `group-${groupingMode}-${groupKey}` : undefined
-    const isGroupCollapsed = groupId ? collapsedGroups.has(groupId) : false
-
-    // Skip nodes in collapsed groups
-    if (isGroupCollapsed) continue
-
-    nodes.push({
-      id: node.id,
-      type: 'k8sResource',
-      position: { x: 0, y: 0 },
-      data: {
-        kind: node.kind,
-        name: node.name,
-        status: node.status,
-        nodeData: node.data,
-        selected: false,
-      },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
-    })
-  }
-
-  return { nodes, groupMap }
-}
 
 // Build edges, handling collapsed groups
 function buildEdges(
@@ -205,16 +75,19 @@ function buildEdges(
   collapsedGroups: Set<string>,
   groupMap: Map<string, string[]>,
   groupingMode: GroupingMode,
-  isTrafficView: boolean
+  isTrafficView: boolean,
+  nodeToGroup?: Map<string, string>
 ): Edge[] {
   const edges: Edge[] = []
-  const nodeToGroup = new Map<string, string>()
 
-  // Build reverse lookup: node -> group
-  for (const [groupKey, memberIds] of groupMap) {
-    const groupId = `group-${groupingMode}-${groupKey}`
-    for (const nodeId of memberIds) {
-      nodeToGroup.set(nodeId, groupId)
+  // Build reverse lookup if not provided
+  const nodeGroupMap = nodeToGroup || new Map<string, string>()
+  if (!nodeToGroup) {
+    for (const [groupKey, memberIds] of groupMap) {
+      const groupId = `group-${groupingMode}-${groupKey}`
+      for (const nodeId of memberIds) {
+        nodeGroupMap.set(nodeId, groupId)
+      }
     }
   }
 
@@ -223,13 +96,13 @@ function buildEdges(
     let target = edge.target
 
     // If source is in a collapsed group, point to the group instead
-    const sourceGroup = nodeToGroup.get(source)
+    const sourceGroup = nodeGroupMap.get(source)
     if (sourceGroup && collapsedGroups.has(sourceGroup)) {
       source = sourceGroup
     }
 
     // If target is in a collapsed group, point to the group instead
-    const targetGroup = nodeToGroup.get(target)
+    const targetGroup = nodeGroupMap.get(target)
     if (targetGroup && collapsedGroups.has(targetGroup)) {
       target = targetGroup
     }
@@ -265,65 +138,6 @@ function buildEdges(
   }
 
   return edges
-}
-
-// Layout nodes using ELK
-async function layoutNodes(
-  nodes: Node[],
-  edges: Edge[],
-  _grouped: boolean
-): Promise<Node[]> {
-  // Build nodes with proper dimensions
-  const allNodes = nodes.map(node => {
-    if (node.type === 'group') {
-      return { id: node.id, width: 250, height: 80 }
-    }
-    // Get dimensions from NODE_DIMENSIONS based on kind
-    const kind = node.data?.kind as NodeKind | undefined
-    const dims = kind ? NODE_DIMENSIONS[kind] : { width: 200, height: 56 }
-
-    return {
-      id: node.id,
-      width: dims.width,
-      height: dims.height,
-    }
-  })
-
-  const graph = {
-    id: 'root',
-    layoutOptions: elkOptions,
-    children: allNodes,
-    edges: edges.map(edge => ({
-      id: edge.id,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
-  }
-
-  try {
-    const layoutedGraph = await elk.layout(graph)
-
-    return nodes.map(node => {
-      const elkNode = layoutedGraph.children?.find(n => n.id === node.id)
-      return {
-        ...node,
-        position: {
-          x: elkNode?.x ?? 0,
-          y: elkNode?.y ?? 0,
-        },
-      }
-    })
-  } catch (err) {
-    console.error('ELK layout error:', err)
-    // Fallback: simple grid layout
-    return nodes.map((node, i) => ({
-      ...node,
-      position: {
-        x: (i % 5) * 350,
-        y: Math.floor(i / 5) * 100,
-      },
-    }))
-  }
 }
 
 // Custom node types
@@ -440,68 +254,35 @@ export function TopologyGraph({
     return { nodes: newNodes, edges: newEdges }
   }, [])
 
-  // Build nodes and edges with grouping
-  const { flowNodes, flowEdges } = useMemo(() => {
+  // Prepare topology data with expanded pod groups
+  const { workingNodes, workingEdges } = useMemo(() => {
     if (!topology) {
-      return { flowNodes: [] as Node[], flowEdges: [] as Edge[], groupMap: new Map() }
+      return { workingNodes: [] as TopologyNode[], workingEdges: [] as TopologyEdge[] }
     }
 
-    // Start with topology data, expand any expanded pod groups
-    let workingNodes = [...topology.nodes]
-    let workingEdges = [...topology.edges]
+    let nodes = [...topology.nodes]
+    let edges = [...topology.edges]
 
     for (const podGroupId of expandedPodGroups) {
-      const result = expandPodGroup(workingNodes, workingEdges, podGroupId)
-      workingNodes = result.nodes
-      workingEdges = result.edges
+      const result = expandPodGroup(nodes, edges, podGroupId)
+      nodes = result.nodes
+      edges = result.edges
     }
 
-    const { nodes: builtNodes, groupMap } = buildNodesWithGroups(
-      workingNodes,
-      groupingMode,
-      collapsedGroups,
-      handleToggleCollapse
-    )
-
-    // Add expand/collapse handlers to pod-related nodes
-    const nodesWithHandlers = builtNodes.map(node => {
-      const isPodGroup = node.data?.kind === 'PodGroup'
-      const nodeData = node.data?.nodeData as Record<string, unknown> | undefined
-      const expandedFromGroup = nodeData?.expandedFromGroup as string | undefined
-
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          onExpand: isPodGroup ? handleExpandPodGroup : undefined,
-          onCollapse: expandedFromGroup ? handleCollapsePodGroup : undefined,
-          isExpanded: isPodGroup ? expandedPodGroups.has(node.id) : undefined,
-        },
-      }
-    })
-
-    const builtEdges = buildEdges(
-      workingEdges,
-      collapsedGroups,
-      groupMap,
-      groupingMode,
-      isTrafficView
-    )
-
-    return { flowNodes: nodesWithHandlers, flowEdges: builtEdges, groupMap }
-  }, [topology, groupingMode, collapsedGroups, handleToggleCollapse, isTrafficView, expandedPodGroups, expandPodGroup, handleExpandPodGroup, handleCollapsePodGroup])
+    return { workingNodes: nodes, workingEdges: edges }
+  }, [topology, expandedPodGroups, expandPodGroup])
 
   // Structure key for change detection
   const structureKey = useMemo(() => {
-    const nodeIds = flowNodes.map(n => `${n.id}:${n.parentId || ''}`).sort().join(',')
+    const nodeIds = workingNodes.map(n => n.id).sort().join(',')
     const collapsed = Array.from(collapsedGroups).sort().join(',')
     const expanded = Array.from(expandedPodGroups).sort().join(',')
     return `${nodeIds}|${collapsed}|${expanded}|${groupingMode}`
-  }, [flowNodes, collapsedGroups, expandedPodGroups, groupingMode])
+  }, [workingNodes, collapsedGroups, expandedPodGroups, groupingMode])
 
-  // Layout when structure changes
+  // Layout when structure changes - use hierarchical ELK layout
   useEffect(() => {
-    if (flowNodes.length === 0) {
+    if (workingNodes.length === 0) {
       setNodes([])
       setEdges([])
       prevStructureRef.current = ''
@@ -512,25 +293,58 @@ export function TopologyGraph({
 
     if (structureChanged) {
       prevStructureRef.current = structureKey
-      const isGrouped = groupingMode !== 'none'
-      layoutNodes(flowNodes, flowEdges, isGrouped).then((layoutedNodes) => {
-        setNodes(layoutedNodes)
-        setEdges(flowEdges)
-      })
-    } else {
-      // Just update data
-      setNodes(currentNodes =>
-        currentNodes.map(node => {
-          const updated = flowNodes.find(n => n.id === node.id)
-          if (updated) {
-            return { ...node, data: { ...node.data, ...updated.data } }
-          }
-          return node
-        })
+
+      // Build hierarchical ELK graph
+      const { elkGraph, groupMap, nodeToGroup } = buildHierarchicalElkGraph(
+        workingNodes,
+        workingEdges,
+        groupingMode,
+        collapsedGroups
       )
-      setEdges(flowEdges)
+
+      // Apply layout and get positioned nodes
+      applyHierarchicalLayout(
+        elkGraph,
+        workingNodes,
+        groupMap,
+        groupingMode,
+        collapsedGroups,
+        handleToggleCollapse
+      ).then(({ nodes: layoutedNodes }) => {
+        // Add expand/collapse handlers to pod-related nodes
+        const nodesWithHandlers = layoutedNodes.map(node => {
+          const isPodGroup = node.data?.kind === 'PodGroup'
+          const nodeData = node.data?.nodeData as Record<string, unknown> | undefined
+          const expandedFromGroup = nodeData?.expandedFromGroup as string | undefined
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              onExpand: isPodGroup ? handleExpandPodGroup : undefined,
+              onCollapse: expandedFromGroup ? handleCollapsePodGroup : undefined,
+              isExpanded: isPodGroup ? expandedPodGroups.has(node.id) : undefined,
+            },
+          }
+        })
+
+        setNodes(nodesWithHandlers)
+
+        // Build edges with styling
+        const builtEdges = buildEdges(
+          workingEdges,
+          collapsedGroups,
+          groupMap,
+          groupingMode,
+          isTrafficView,
+          nodeToGroup
+        )
+        setEdges(builtEdges)
+      })
     }
-  }, [flowNodes, flowEdges, structureKey, groupingMode, setNodes, setEdges])
+    // Note: When structure hasn't changed, nodes keep their positions
+    // Data updates happen via selected state effect
+  }, [workingNodes, workingEdges, structureKey, groupingMode, collapsedGroups, handleToggleCollapse, isTrafficView, expandedPodGroups, handleExpandPodGroup, handleCollapsePodGroup, setNodes, setEdges])
 
   // Handle node click
   const handleNodeClick = useCallback(
@@ -573,29 +387,33 @@ export function TopologyGraph({
   }
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      onNodesChange={onNodesChange}
-      onEdgesChange={onEdgesChange}
-      onNodeClick={handleNodeClick}
-      nodeTypes={nodeTypes}
-      fitView
-      fitViewOptions={{ padding: 0.2 }}
-      minZoom={0.1}
-      maxZoom={2}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#334155" />
-      <Controls
-        className="bg-slate-800 border border-slate-700 rounded-lg"
-        showInteractive={false}
-      />
-      <MiniMap
-        className="bg-slate-800 border border-slate-700 rounded-lg"
-        nodeColor={(node) => getNodeColor(node.data?.kind as string || node.data?.type as string || '')}
-        maskColor="rgba(15, 23, 42, 0.8)"
-      />
-    </ReactFlow>
+    <ReactFlowProvider>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
+        nodeTypes={nodeTypes}
+        fitView
+        fitViewOptions={{ padding: 0.2 }}
+        minZoom={0.1}
+        maxZoom={2}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#334155" />
+        <Controls
+          className="bg-slate-800 border border-slate-700 rounded-lg"
+          showInteractive={false}
+        />
+        <MiniMap
+          className="bg-slate-800 border border-slate-700 rounded-lg"
+          nodeColor={(node) => getNodeColor(node.data?.kind as string || node.data?.type as string || '')}
+          maskColor="rgba(15, 23, 42, 0.8)"
+        />
+{/* Search temporarily disabled for debugging */}
+      </ReactFlow>
+    </ReactFlowProvider>
   )
 }
+

@@ -30,21 +30,102 @@ export const GroupNode = memo(function GroupNode({
     }
   }
 
-  const getColor = () => {
+  const getBorderColor = () => {
     switch (type) {
       case 'namespace':
-        return 'border-indigo-500/50 bg-indigo-500/5'
+        return 'border-indigo-500/40'
       case 'app':
-        return 'border-emerald-500/50 bg-emerald-500/5'
+        return 'border-emerald-500/40'
       case 'label':
-        return 'border-amber-500/50 bg-amber-500/5'
+        return 'border-amber-500/40'
       default:
-        return 'border-slate-500/50 bg-slate-500/5'
+        return 'border-slate-500/40'
+    }
+  }
+
+  const getHeaderBgColor = () => {
+    switch (type) {
+      case 'namespace':
+        return 'bg-indigo-500/20'
+      case 'app':
+        return 'bg-emerald-500/20'
+      case 'label':
+        return 'bg-amber-500/20'
+      default:
+        return 'bg-slate-500/20'
+    }
+  }
+
+  const getLabelColor = () => {
+    switch (type) {
+      case 'namespace':
+        return 'text-indigo-300'
+      case 'app':
+        return 'text-emerald-300'
+      case 'label':
+        return 'text-amber-300'
+      default:
+        return 'text-slate-300'
+    }
+  }
+
+  const getIconColor = () => {
+    switch (type) {
+      case 'namespace':
+        return 'text-indigo-400'
+      case 'app':
+        return 'text-emerald-400'
+      case 'label':
+        return 'text-amber-400'
+      default:
+        return 'text-slate-400'
     }
   }
 
   const Icon = getIcon()
 
+  // When collapsed, render as a compact card
+  if (collapsed) {
+    return (
+      <>
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!bg-transparent !border-0 !w-0 !h-0"
+        />
+
+        <div
+          className={clsx(
+            'rounded-xl border-2 p-4 cursor-pointer hover:border-opacity-70 transition-all',
+            getBorderColor(),
+            getHeaderBgColor()
+          )}
+          onClick={() => onToggleCollapse(id)}
+        >
+          <div className="flex items-center gap-3">
+            <ChevronRight className={clsx('w-5 h-5', getIconColor())} />
+            <Icon className={clsx('w-6 h-6', getIconColor())} />
+            <span className={clsx('text-xl font-semibold', getLabelColor())}>{name}</span>
+            {label && (
+              <span className="text-sm text-slate-400">({label})</span>
+            )}
+          </div>
+          <div className="mt-2 text-sm text-slate-400">
+            {nodeCount} {nodeCount === 1 ? 'resource' : 'resources'}
+          </div>
+        </div>
+
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!bg-transparent !border-0 !w-0 !h-0"
+        />
+      </>
+    )
+  }
+
+  // When expanded, render as a container with header
+  // Children are rendered automatically by ReactFlow via parentId
   return (
     <>
       <Handle
@@ -55,38 +136,30 @@ export const GroupNode = memo(function GroupNode({
 
       <div
         className={clsx(
-          'rounded-lg border-2 border-dashed transition-all',
-          getColor(),
-          collapsed ? 'p-3' : 'p-2'
+          'w-full h-full rounded-xl border-2',
+          getBorderColor(),
+          'bg-slate-900/30'
         )}
-        style={collapsed ? {} : { minWidth: 200, minHeight: 100 }}
       >
-        {/* Header */}
+        {/* Header bar - fixed at top */}
         <div
-          className="flex items-center gap-2 cursor-pointer select-none"
+          className={clsx(
+            'absolute top-0 left-0 right-0 flex items-center gap-3 px-4 py-3 rounded-t-xl cursor-pointer',
+            getHeaderBgColor()
+          )}
           onClick={() => onToggleCollapse(id)}
         >
-          {collapsed ? (
-            <ChevronRight className="w-4 h-4 text-slate-400" />
-          ) : (
-            <ChevronDown className="w-4 h-4 text-slate-400" />
-          )}
-          <Icon className="w-4 h-4 text-slate-400" />
-          <span className="text-sm font-medium text-slate-300">{name}</span>
+          <ChevronDown className={clsx('w-5 h-5', getIconColor())} />
+          <Icon className={clsx('w-6 h-6', getIconColor())} />
+          <span className={clsx('text-xl font-semibold', getLabelColor())}>{name}</span>
           {label && (
-            <span className="text-xs text-slate-500">({label})</span>
+            <span className="text-sm text-slate-400">({label})</span>
           )}
-          <span className="ml-auto text-xs text-slate-500 bg-slate-700/50 px-2 py-0.5 rounded">
+          <span className="ml-auto text-sm text-slate-400 bg-slate-800/60 px-3 py-1 rounded-lg">
             {nodeCount} {nodeCount === 1 ? 'resource' : 'resources'}
           </span>
         </div>
-
-        {/* Collapsed summary */}
-        {collapsed && (
-          <div className="mt-2 text-xs text-slate-500">
-            Click to expand
-          </div>
-        )}
+        {/* Children are positioned below the header by ELK padding */}
       </div>
 
       <Handle
