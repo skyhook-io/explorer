@@ -1,5 +1,8 @@
 # Skyhook Explorer
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+
 Real-time Kubernetes cluster topology visualization in your browser.
 
 <p align="center">
