@@ -43,6 +43,7 @@ import {
   JobRenderer,
   CronJobRenderer,
   HPARenderer,
+  GenericRenderer,
 } from './renderers'
 
 interface ResourceDetailDrawerProps {
@@ -372,8 +373,7 @@ function ActionsBar({ resource, data }: { resource: SelectedResource; data: any 
 // YAML VIEW
 // ============================================================================
 
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { CodeViewer } from '../ui/CodeViewer'
 
 function YamlView({ data, onCopy, copied }: { data: any; onCopy: (text: string) => void; copied: boolean }) {
   const json = JSON.stringify(data, null, 2)
@@ -389,28 +389,12 @@ function YamlView({ data, onCopy, copied }: { data: any; onCopy: (text: string) 
           Copy
         </button>
       </div>
-      <div className="rounded-lg overflow-hidden max-h-[calc(100vh-250px)] overflow-auto">
-        <SyntaxHighlighter
-          language="json"
-          style={oneDark}
-          showLineNumbers
-          customStyle={{
-            margin: 0,
-            padding: '12px',
-            fontSize: '12px',
-            background: '#0f172a',
-          }}
-          lineNumberStyle={{
-            minWidth: '2.5em',
-            paddingRight: '1em',
-            color: '#475569',
-            userSelect: 'none',
-          }}
-          lineProps={{ style: { background: 'transparent' } }}
-        >
-          {json}
-        </SyntaxHighlighter>
-      </div>
+      <CodeViewer
+        code={json}
+        language="json"
+        showLineNumbers
+        maxHeight="calc(100vh - 250px)"
+      />
     </div>
   )
 }
@@ -438,6 +422,14 @@ function ResourceContent({ resource, data, relationships, onCopy, copied, onNavi
     resource.name
   )
 
+  // Known resource types with specific renderers
+  const knownKinds = [
+    'pods', 'deployments', 'statefulsets', 'daemonsets', 'replicasets',
+    'services', 'ingresses', 'configmaps', 'secrets', 'jobs', 'cronjobs',
+    'hpas', 'horizontalpodautoscalers'
+  ]
+  const isKnownKind = knownKinds.includes(kind)
+
   return (
     <div className="p-4 space-y-4">
       {/* Kind-specific content - delegates to modular renderers */}
@@ -450,7 +442,10 @@ function ResourceContent({ resource, data, relationships, onCopy, copied, onNavi
       {kind === 'secrets' && <SecretRenderer data={data} />}
       {kind === 'jobs' && <JobRenderer data={data} />}
       {kind === 'cronjobs' && <CronJobRenderer data={data} />}
-      {kind === 'hpas' && <HPARenderer data={data} />}
+      {(kind === 'hpas' || kind === 'horizontalpodautoscalers') && <HPARenderer data={data} />}
+
+      {/* Generic renderer for CRDs and unknown resource types */}
+      {!isKnownKind && <GenericRenderer data={data} />}
 
       {/* Related Resources - clickable links to related items */}
       <RelatedResourcesSection relationships={relationships} onNavigate={onNavigate} />
@@ -500,9 +495,42 @@ function getResourceStatus(kind: string, data: any): { text: string; color: stri
     return { text: status.text, color: status.color }
   }
 
-  if (k === 'hpas') {
+  if (k === 'hpas' || k === 'horizontalpodautoscalers') {
     const status = getHPAStatus(data)
     return { text: status.text, color: status.color }
+  }
+
+  // Generic status extraction for CRDs and unknown kinds
+  const status = data.status
+  if (status) {
+    // Check for phase (common pattern)
+    if (status.phase) {
+      const phase = String(status.phase)
+      const healthyPhases = ['Running', 'Active', 'Succeeded', 'Ready', 'Healthy', 'Available', 'Bound']
+      const warningPhases = ['Pending', 'Progressing', 'Unknown', 'Terminating']
+      const isHealthy = healthyPhases.includes(phase)
+      const isWarning = warningPhases.includes(phase)
+      return {
+        text: phase,
+        color: isHealthy ? 'bg-green-500/20 text-green-400' :
+               isWarning ? 'bg-yellow-500/20 text-yellow-400' :
+               'bg-red-500/20 text-red-400'
+      }
+    }
+
+    // Check for conditions
+    if (status.conditions && Array.isArray(status.conditions)) {
+      const readyCondition = status.conditions.find((c: any) =>
+        c.type === 'Ready' || c.type === 'Available' || c.type === 'Progressing'
+      )
+      if (readyCondition) {
+        const isReady = readyCondition.status === 'True'
+        return {
+          text: isReady ? 'Ready' : 'Not Ready',
+          color: isReady ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
+        }
+      }
+    }
   }
 
   return null

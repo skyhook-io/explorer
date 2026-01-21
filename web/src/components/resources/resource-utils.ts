@@ -75,6 +75,7 @@ export function getPodStatus(pod: any): StatusBadge {
 export function getPodProblems(pod: any): PodProblem[] {
   const problems: PodProblem[] = []
   const containerStatuses = pod.status?.containerStatuses || []
+  const conditions = pod.status?.conditions || []
 
   for (const cs of containerStatuses) {
     // Check waiting state
@@ -84,6 +85,8 @@ export function getPodProblems(pod: any): PodProblem[] {
         problems.push({ severity: 'critical', message: reason })
       } else if (reason === 'CreateContainerConfigError') {
         problems.push({ severity: 'critical', message: 'Config Error' })
+      } else if (reason === 'ContainerCannotRun') {
+        problems.push({ severity: 'critical', message: 'Cannot Run' })
       }
     }
     // Check terminated state
@@ -94,13 +97,65 @@ export function getPodProblems(pod: any): PodProblem[] {
     if (cs.restartCount > 5) {
       problems.push({ severity: 'medium', message: `${cs.restartCount} restarts` })
     }
+    // Volume mount issues from last state
+    const lastMsg = cs.lastState?.terminated?.message?.toLowerCase() || ''
+    if (lastMsg.includes('failed to mount') || lastMsg.includes('failedattachvolume')) {
+      problems.push({ severity: 'high', message: 'Volume Mount Failed' })
+    }
   }
 
   // Check conditions
-  const conditions = pod.status?.conditions || []
   for (const cond of conditions) {
     if (cond.type === 'PodScheduled' && cond.status === 'False') {
-      problems.push({ severity: 'high', message: 'Unschedulable' })
+      if (cond.reason === 'Unschedulable') {
+        problems.push({ severity: 'high', message: 'Unschedulable' })
+      }
+    }
+    // Readiness/Liveness probe failures
+    if (cond.type === 'ContainersReady' && cond.status === 'False') {
+      const msg = (cond.message || '').toLowerCase()
+      if (msg.includes('readiness')) {
+        problems.push({ severity: 'medium', message: 'Readiness Probe Failing' })
+      } else if (msg.includes('liveness')) {
+        problems.push({ severity: 'high', message: 'Liveness Probe Failing' })
+      }
+    }
+    // IP allocation failures (subnet exhaustion)
+    if (cond.type === 'PodReadyToStartContainers' && cond.status === 'False') {
+      const msg = (cond.message || '').toLowerCase()
+      if (msg.includes('failed to assign an ip') || msg.includes('pod sandbox')) {
+        problems.push({ severity: 'critical', message: 'IP Allocation Failed' })
+      }
+    }
+  }
+
+  // Evicted pods
+  if (pod.status?.phase === 'Failed' && pod.status?.reason === 'Evicted') {
+    problems.push({ severity: 'high', message: 'Evicted' })
+  }
+
+  // Stuck terminating (zombie pod)
+  if (pod.metadata?.deletionTimestamp) {
+    const deleteTime = new Date(pod.metadata.deletionTimestamp).getTime()
+    const ageSeconds = (Date.now() - deleteTime) / 1000
+    if (ageSeconds > 60) {
+      problems.push({ severity: 'medium', message: 'Stuck Terminating' })
+    }
+  }
+
+  // Not ready (Running but containers not ready)
+  const phase = pod.status?.phase
+  if (phase === 'Running') {
+    const readyContainers = containerStatuses.filter((c: any) => c.ready).length
+    const totalContainers = containerStatuses.length
+    if (totalContainers > 0 && readyContainers < totalContainers) {
+      // Only add if we haven't already flagged a more specific issue
+      const hasSpecificIssue = problems.some(p =>
+        p.message.includes('Probe') || p.message.includes('CrashLoop') || p.message.includes('OOM')
+      )
+      if (!hasSpecificIssue) {
+        problems.push({ severity: 'medium', message: 'Not Ready' })
+      }
     }
   }
 
@@ -187,6 +242,29 @@ export function getWorkloadImages(resource: any): string[] {
   })
 }
 
+export function getWorkloadConditions(resource: any): { conditions: string[]; hasIssues: boolean } {
+  const conditions = resource.status?.conditions || []
+  const activeConditions: string[] = []
+  let hasIssues = false
+
+  for (const cond of conditions) {
+    if (cond.status === 'True') {
+      activeConditions.push(cond.type)
+      // Progressing and Available are good, others might indicate issues
+      if (!['Progressing', 'Available'].includes(cond.type)) {
+        hasIssues = true
+      }
+    } else if (cond.status === 'False') {
+      // Available=False is an issue
+      if (cond.type === 'Available') {
+        hasIssues = true
+      }
+    }
+  }
+
+  return { conditions: activeConditions, hasIssues }
+}
+
 export function getReplicaSetOwner(rs: any): string | null {
   const ownerRefs = rs.metadata?.ownerReferences || []
   const owner = ownerRefs[0]
@@ -231,8 +309,11 @@ export function getServiceExternalIP(service: any): string | null {
   const type = service.spec?.type
   if (type === 'LoadBalancer') {
     const ingress = service.status?.loadBalancer?.ingress || []
+    // Show all IPs, not just first
     if (ingress.length > 0) {
-      return ingress[0].ip || ingress[0].hostname || null
+      const ips = ingress.map((i: any) => i.ip || i.hostname).filter(Boolean)
+      if (ips.length > 2) return `${ips[0]} +${ips.length - 1}`
+      return ips.join(', ') || null
     }
     return 'Pending'
   }
@@ -243,10 +324,39 @@ export function getServiceExternalIP(service: any): string | null {
       return `NodePort: ${nodePorts.join(', ')}`
     }
   }
+  // Also check spec.externalIPs (can be set on any service type)
   if (service.spec?.externalIPs?.length > 0) {
-    return service.spec.externalIPs[0]
+    const ips = service.spec.externalIPs
+    if (ips.length > 2) return `${ips[0]} +${ips.length - 1}`
+    return ips.join(', ')
   }
   return null
+}
+
+export function getServiceSelector(service: any): string {
+  // For ExternalName services, show the external DNS name
+  if (service.spec?.type === 'ExternalName') {
+    return service.spec.externalName || '-'
+  }
+  const selector = service.spec?.selector || {}
+  const pairs = Object.entries(selector).map(([k, v]) => `${k}=${v}`)
+  if (pairs.length === 0) return 'None'
+  if (pairs.length <= 2) return pairs.join(', ')
+  return `${pairs.slice(0, 2).join(', ')} +${pairs.length - 2}`
+}
+
+export function getServiceEndpointsStatus(service: any): { status: string; color: string } {
+  const type = service.spec?.type
+  if (type === 'ExternalName') {
+    return { status: 'External', color: 'bg-violet-500/20 text-violet-400' }
+  }
+  const selector = service.spec?.selector || {}
+  const hasSelector = Object.keys(selector).length > 0
+  if (!hasSelector) {
+    return { status: 'None', color: 'bg-slate-500/20 text-slate-400' }
+  }
+  // If it has a selector, it should have endpoints (we assume active since we can't check endpoints from service alone)
+  return { status: 'Active', color: 'bg-green-500/20 text-green-400' }
 }
 
 // ============================================================================
@@ -285,6 +395,33 @@ export function getIngressAddress(ingress: any): string | null {
     return lbIngress[0].ip || lbIngress[0].hostname || null
   }
   return null
+}
+
+export function getIngressRules(ingress: any): string {
+  const rules = ingress.spec?.rules || []
+  if (rules.length === 0) return 'No rules'
+
+  const formattedRules = rules.map((rule: any) => {
+    const host = rule.host || '*'
+    const paths = rule.http?.paths || []
+    if (paths.length === 0) return host
+
+    const pathMappings = paths.map((p: any) => {
+      const path = p.path || '/'
+      // Support both new (service.name) and legacy (serviceName) formats
+      const backend = p.backend?.service?.name || (p.backend as any)?.serviceName || 'unknown'
+      return `${path}→${backend}`
+    })
+
+    if (pathMappings.length === 1) {
+      return `${host}: ${pathMappings[0]}`
+    }
+    return `${host}: ${pathMappings.join(', ')}`
+  })
+
+  if (formattedRules.length === 1) return formattedRules[0]
+  if (formattedRules.length === 2) return formattedRules.join('; ')
+  return `${formattedRules[0]}; +${formattedRules.length - 1} more`
 }
 
 // ============================================================================
@@ -458,6 +595,88 @@ export function getHPAMetrics(hpa: any): { cpu?: number; memory?: number; custom
   }
 
   return result
+}
+
+// ============================================================================
+// NODE UTILITIES
+// ============================================================================
+
+export function getNodeStatus(node: any): StatusBadge {
+  const conditions = node.status?.conditions || []
+  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
+
+  const isReady = readyCondition?.status === 'True'
+  const isUnschedulable = node.spec?.unschedulable === true
+
+  if (isReady && isUnschedulable) {
+    return { text: 'Ready,SchedulingDisabled', color: healthColors.degraded, level: 'degraded' }
+  }
+  if (isReady) {
+    return { text: 'Ready', color: healthColors.healthy, level: 'healthy' }
+  }
+  if (readyCondition?.status === 'False') {
+    return { text: 'NotReady', color: healthColors.unhealthy, level: 'unhealthy' }
+  }
+  return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
+}
+
+export function getNodeRoles(node: any): string {
+  const labels = node.metadata?.labels || {}
+  const roles: string[] = []
+
+  for (const [key, value] of Object.entries(labels)) {
+    if (key.startsWith('node-role.kubernetes.io/')) {
+      let role = key.replace('node-role.kubernetes.io/', '')
+      // Normalize master to control-plane
+      if (role === 'master') role = 'control-plane'
+      if (role && value !== 'false') {
+        roles.push(role)
+      }
+    }
+  }
+
+  if (roles.length === 0) return 'worker'
+  return roles.join(', ')
+}
+
+export interface NodeCondition {
+  type: string
+  status: 'True' | 'False' | 'Unknown'
+  message?: string
+}
+
+// Problem conditions that indicate node issues
+const NODE_PROBLEM_CONDITIONS = ['DiskPressure', 'MemoryPressure', 'PIDPressure', 'NetworkUnavailable']
+
+export function getNodeConditions(node: any): { problems: string[]; healthy: boolean } {
+  const conditions = node.status?.conditions || []
+  const problems: string[] = []
+
+  for (const cond of conditions) {
+    // Ready=False is a problem
+    if (cond.type === 'Ready' && cond.status !== 'True') {
+      problems.push('NotReady')
+    }
+    // Other conditions are problems when True
+    if (NODE_PROBLEM_CONDITIONS.includes(cond.type) && cond.status === 'True') {
+      // Format: "DiskPressure" -> "Disk Pressure"
+      const formatted = cond.type.replace(/([A-Z])/g, ' $1').trim()
+      problems.push(formatted)
+    }
+  }
+
+  return { problems, healthy: problems.length === 0 }
+}
+
+export function getNodeTaints(node: any): { count: number; text: string } {
+  const taints = node.spec?.taints || []
+  const count = taints.length
+  if (count === 0) return { count: 0, text: 'None' }
+  return { count, text: count === 1 ? '1 taint' : `${count} taints` }
+}
+
+export function getNodeVersion(node: any): string {
+  return node.status?.nodeInfo?.kubeletVersion || '-'
 }
 
 // ============================================================================

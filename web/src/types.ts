@@ -15,6 +15,7 @@ export type NodeKind =
   | 'HPA'
   | 'Job'
   | 'CronJob'
+  | 'PVC'
   | 'Namespace'
 
 export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
@@ -84,8 +85,9 @@ export interface TimelineEvent {
   diff?: DiffInfo
   healthState?: 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
   owner?: OwnerInfo // Owner/controller for managed resources
-  // For k8s_event
-  reason?: string
+  isHistorical?: boolean // True if extracted from resource metadata/status (not observed in real-time)
+  // For k8s_event and historical events
+  reason?: string // Event reason or historical event description (e.g., "created", "started")
   message?: string
   eventType?: 'Normal' | 'Warning'
   count?: number
@@ -130,7 +132,7 @@ export interface Namespace {
 }
 
 // Main view type (which screen we're on)
-export type MainView = 'topology' | 'resources' | 'events'
+export type MainView = 'topology' | 'resources' | 'events' | 'helm'
 
 // Topology view mode (for backwards compatibility, also exported as ViewMode)
 export type TopologyMode = 'full' | 'traffic'
@@ -179,4 +181,110 @@ export interface Relationships {
 export interface ResourceWithRelationships<T = unknown> {
   resource: T
   relationships?: Relationships
+}
+
+// API Resource (from discovery endpoint)
+export interface APIResource {
+  group: string
+  version: string
+  kind: string
+  name: string // Plural name (e.g., "deployments")
+  namespaced: boolean
+  isCrd: boolean
+  verbs: string[]
+}
+
+// Helm release types
+export interface HelmRelease {
+  name: string
+  namespace: string
+  chart: string
+  chartVersion: string
+  appVersion: string
+  status: string
+  revision: number
+  updated: string // ISO date string
+}
+
+export interface HelmRevision {
+  revision: number
+  status: string
+  chart: string
+  appVersion: string
+  description: string
+  updated: string // ISO date string
+}
+
+export interface HelmReleaseDetail {
+  name: string
+  namespace: string
+  chart: string
+  chartVersion: string
+  appVersion: string
+  status: string
+  revision: number
+  updated: string
+  description: string
+  notes: string
+  history: HelmRevision[]
+  resources: HelmOwnedResource[]
+  hooks?: HelmHook[]
+  readme?: string
+  dependencies?: ChartDependency[]
+}
+
+export interface HelmHook {
+  name: string
+  kind: string
+  events: string[]
+  weight: number
+  status?: string
+}
+
+export interface ChartDependency {
+  name: string
+  version: string
+  repository?: string
+  condition?: string
+  enabled: boolean
+}
+
+export interface HelmOwnedResource {
+  kind: string
+  name: string
+  namespace: string
+  status?: string   // Running, Pending, Failed, Active, etc.
+  ready?: string    // e.g., "3/3" for deployments
+  message?: string  // Status message or reason
+}
+
+export interface HelmValues {
+  userSupplied: Record<string, unknown>
+  computed?: Record<string, unknown>
+}
+
+export interface ManifestDiff {
+  revision1: number
+  revision2: number
+  diff: string
+}
+
+// Selected Helm release (for drawer state)
+export interface SelectedHelmRelease {
+  namespace: string
+  name: string
+}
+
+// Upgrade availability info
+export interface UpgradeInfo {
+  currentVersion: string
+  latestVersion?: string
+  updateAvailable: boolean
+  repositoryName?: string
+  error?: string
+}
+
+// Batch upgrade info (map of "namespace/name" to UpgradeInfo)
+export interface BatchUpgradeInfo {
+  releases: Record<string, UpgradeInfo>
 }

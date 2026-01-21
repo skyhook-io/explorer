@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/skyhook-io/skyhook-explorer/internal/helm"
 	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
 	"github.com/skyhook-io/skyhook-explorer/internal/server"
 	"github.com/skyhook-io/skyhook-explorer/internal/static"
@@ -63,12 +64,27 @@ func main() {
 		log.Printf("Change history persistence enabled: %s", historyPath)
 	}
 
-	// Initialize resource cache
+	// Initialize resource cache (typed informers for core resources)
 	if err := k8s.InitResourceCache(); err != nil {
 		log.Fatalf("Failed to initialize resource cache: %v", err)
 	}
 
 	log.Printf("Resource cache initialized with %d resources", k8s.GetResourceCache().GetResourceCount())
+
+	// Initialize resource discovery (for CRD support)
+	if err := k8s.InitResourceDiscovery(); err != nil {
+		log.Printf("Warning: Failed to initialize resource discovery: %v", err)
+	}
+
+	// Initialize dynamic resource cache (for CRDs)
+	if err := k8s.InitDynamicResourceCache(); err != nil {
+		log.Printf("Warning: Failed to initialize dynamic resource cache: %v", err)
+	}
+
+	// Initialize Helm client
+	if err := helm.Initialize(k8s.GetKubeconfigPath()); err != nil {
+		log.Printf("Warning: Failed to initialize Helm client: %v", err)
+	}
 
 	// Create and start server
 	cfg := server.Config{
@@ -90,6 +106,9 @@ func main() {
 		srv.Stop()
 		if cache := k8s.GetResourceCache(); cache != nil {
 			cache.Stop()
+		}
+		if dynCache := k8s.GetDynamicResourceCache(); dynCache != nil {
+			dynCache.Stop()
 		}
 		os.Exit(0)
 	}()

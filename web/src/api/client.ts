@@ -1,5 +1,18 @@
-import { useQuery } from '@tanstack/react-query'
-import type { Topology, ClusterInfo, Namespace, TimelineEvent, TimeRange, ResourceWithRelationships } from '../types'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import type {
+  Topology,
+  ClusterInfo,
+  Namespace,
+  TimelineEvent,
+  TimeRange,
+  ResourceWithRelationships,
+  HelmRelease,
+  HelmReleaseDetail,
+  HelmValues,
+  ManifestDiff,
+  UpgradeInfo,
+  BatchUpgradeInfo,
+} from '../types'
 
 const API_BASE = '/api'
 
@@ -228,4 +241,171 @@ export function createLogStream(
   const queryString = params.toString()
 
   return new EventSource(`${API_BASE}/pods/${namespace}/${podName}/logs/stream${queryString ? `?${queryString}` : ''}`)
+}
+
+// ============================================================================
+// Helm API hooks
+// ============================================================================
+
+// List all Helm releases
+export function useHelmReleases(namespace?: string) {
+  const params = namespace ? `?namespace=${namespace}` : ''
+  return useQuery<HelmRelease[]>({
+    queryKey: ['helm-releases', namespace],
+    queryFn: () => fetchJSON(`/helm/releases${params}`),
+    staleTime: 30000, // 30 seconds
+  })
+}
+
+// Get details for a specific Helm release
+export function useHelmRelease(namespace: string, name: string) {
+  return useQuery<HelmReleaseDetail>({
+    queryKey: ['helm-release', namespace, name],
+    queryFn: () => fetchJSON(`/helm/releases/${namespace}/${name}`),
+    enabled: Boolean(namespace && name),
+    staleTime: 30000,
+  })
+}
+
+// Get manifest for a Helm release (optionally at a specific revision)
+export function useHelmManifest(namespace: string, name: string, revision?: number) {
+  const params = revision ? `?revision=${revision}` : ''
+  return useQuery<string>({
+    queryKey: ['helm-manifest', namespace, name, revision],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/helm/releases/${namespace}/${name}/manifest${params}`)
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(error.error || `HTTP ${response.status}`)
+      }
+      return response.text()
+    },
+    enabled: Boolean(namespace && name),
+    staleTime: 60000, // 1 minute
+  })
+}
+
+// Get values for a Helm release
+export function useHelmValues(namespace: string, name: string, allValues?: boolean) {
+  const params = allValues ? '?all=true' : ''
+  return useQuery<HelmValues>({
+    queryKey: ['helm-values', namespace, name, allValues],
+    queryFn: () => fetchJSON(`/helm/releases/${namespace}/${name}/values${params}`),
+    enabled: Boolean(namespace && name),
+    staleTime: 60000,
+  })
+}
+
+// Get diff between two revisions
+export function useHelmManifestDiff(
+  namespace: string,
+  name: string,
+  revision1: number,
+  revision2: number
+) {
+  return useQuery<ManifestDiff>({
+    queryKey: ['helm-diff', namespace, name, revision1, revision2],
+    queryFn: () =>
+      fetchJSON(`/helm/releases/${namespace}/${name}/diff?revision1=${revision1}&revision2=${revision2}`),
+    enabled: Boolean(namespace && name && revision1 > 0 && revision2 > 0 && revision1 !== revision2),
+    staleTime: 60000,
+  })
+}
+
+// Check for upgrade availability (lazy - called when drawer opens)
+export function useHelmUpgradeInfo(namespace: string, name: string, enabled = true) {
+  return useQuery<UpgradeInfo>({
+    queryKey: ['helm-upgrade-info', namespace, name],
+    queryFn: () => fetchJSON(`/helm/releases/${namespace}/${name}/upgrade-info`),
+    enabled: Boolean(namespace && name && enabled),
+    staleTime: 300000, // 5 minutes - upgrade info doesn't change frequently
+    retry: false, // Don't retry on failure - repo might not be configured
+  })
+}
+
+// Batch check for upgrade availability (for list view)
+export function useHelmBatchUpgradeInfo(namespace?: string, enabled = true) {
+  const params = namespace ? `?namespace=${namespace}` : ''
+  return useQuery<BatchUpgradeInfo>({
+    queryKey: ['helm-batch-upgrade-info', namespace],
+    queryFn: () => fetchJSON(`/helm/upgrade-check${params}`),
+    enabled,
+    staleTime: 300000, // 5 minutes
+    retry: false,
+  })
+}
+
+// ============================================================================
+// Helm Actions (mutations)
+// ============================================================================
+
+// Rollback a release to a previous revision
+export function useHelmRollback() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ namespace, name, revision }: { namespace: string; name: string; revision: number }) => {
+      const response = await fetch(`${API_BASE}/helm/releases/${namespace}/${name}/rollback?revision=${revision}`, {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(error.error || `HTTP ${response.status}`)
+      }
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['helm-releases'] })
+      queryClient.invalidateQueries({ queryKey: ['helm-release', variables.namespace, variables.name] })
+    },
+  })
+}
+
+// Uninstall a release
+export function useHelmUninstall() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ namespace, name }: { namespace: string; name: string }) => {
+      const response = await fetch(`${API_BASE}/helm/releases/${namespace}/${name}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(error.error || `HTTP ${response.status}`)
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      // Invalidate releases list
+      queryClient.invalidateQueries({ queryKey: ['helm-releases'] })
+      queryClient.invalidateQueries({ queryKey: ['helm-batch-upgrade-info'] })
+    },
+  })
+}
+
+// Upgrade a release to a new version
+export function useHelmUpgrade() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ namespace, name, version }: { namespace: string; name: string; version: string }) => {
+      const response = await fetch(`${API_BASE}/helm/releases/${namespace}/${name}/upgrade?version=${encodeURIComponent(version)}`, {
+        method: 'POST',
+      })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+        throw new Error(error.error || `HTTP ${response.status}`)
+      }
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['helm-releases'] })
+      queryClient.invalidateQueries({ queryKey: ['helm-release', variables.namespace, variables.name] })
+      queryClient.invalidateQueries({ queryKey: ['helm-upgrade-info', variables.namespace, variables.name] })
+      queryClient.invalidateQueries({ queryKey: ['helm-batch-upgrade-info'] })
+    },
+  })
 }

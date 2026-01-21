@@ -218,9 +218,14 @@ export function getKindColor(kind: string): string {
   if (k.includes('daemonset')) return 'bg-teal-500/20 text-teal-400 border-teal-500/30'
   if (k.includes('statefulset')) return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
   if (k.includes('replicaset')) return 'bg-green-500/20 text-green-400 border-green-500/30'
-  if (k.includes('hpa')) return 'bg-pink-500/20 text-pink-400 border-pink-500/30'
+  if (k.includes('hpa') || k.includes('horizontalpodautoscaler')) return 'bg-pink-500/20 text-pink-400 border-pink-500/30'
+  if (k.includes('cronjob')) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
   if (k.includes('job')) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-  return 'bg-slate-500/20 text-slate-400 border-slate-500/30'
+  if (k.includes('node')) return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
+  if (k.includes('namespace')) return 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+  if (k.includes('persistentvolume')) return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+  // Default color for CRDs - use a distinctive purple/magenta color
+  return 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30'
 }
 
 export function formatKindName(kind: string): string {
@@ -229,8 +234,20 @@ export function formatKindName(kind: string): string {
     pods: 'Pod', deployments: 'Deployment', daemonsets: 'DaemonSet', statefulsets: 'StatefulSet',
     replicasets: 'ReplicaSet', services: 'Service', ingresses: 'Ingress', configmaps: 'ConfigMap',
     secrets: 'Secret', jobs: 'Job', cronjobs: 'CronJob', hpas: 'HPA',
+    horizontalpodautoscalers: 'HPA', nodes: 'Node', namespaces: 'Namespace',
+    persistentvolumeclaims: 'PVC', persistentvolumes: 'PV',
   }
-  return names[k] || kind
+  if (names[k]) return names[k]
+
+  // For unknown kinds (CRDs), use the original kind name
+  // or format it nicely if it's a plural name
+  if (kind.endsWith('s') && !kind.endsWith('ss')) {
+    // Try to singularize simple plurals
+    const singular = kind.slice(0, -1)
+    // Capitalize first letter
+    return singular.charAt(0).toUpperCase() + singular.slice(1)
+  }
+  return kind
 }
 
 // Type for copy handler

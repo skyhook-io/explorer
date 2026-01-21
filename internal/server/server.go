@@ -18,6 +18,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
+	"github.com/skyhook-io/skyhook-explorer/internal/helm"
 	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
 	"github.com/skyhook-io/skyhook-explorer/internal/topology"
 )
@@ -82,6 +83,7 @@ func (s *Server) setupRoutes() {
 		r.Get("/cluster-info", s.handleClusterInfo)
 		r.Get("/topology", s.handleTopology)
 		r.Get("/namespaces", s.handleNamespaces)
+		r.Get("/api-resources", s.handleAPIResources)
 		r.Get("/resources/{kind}", s.handleListResources)
 		r.Get("/resources/{kind}/{namespace}/{name}", s.handleGetResource)
 		r.Get("/events", s.handleEvents)
@@ -91,6 +93,10 @@ func (s *Server) setupRoutes() {
 		// Pod logs
 		r.Get("/pods/{namespace}/{name}/logs", s.handlePodLogs)
 		r.Get("/pods/{namespace}/{name}/logs/stream", s.handlePodLogsStream)
+
+		// Helm routes
+		helmHandlers := helm.NewHandlers()
+		helmHandlers.RegisterRoutes(r)
 	})
 
 	// Static files (frontend)
@@ -185,6 +191,22 @@ func (s *Server) handleNamespaces(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, result)
 }
 
+func (s *Server) handleAPIResources(w http.ResponseWriter, r *http.Request) {
+	discovery := k8s.GetResourceDiscovery()
+	if discovery == nil {
+		s.writeError(w, http.StatusServiceUnavailable, "Resource discovery not available")
+		return
+	}
+
+	resources, err := discovery.GetAPIResources()
+	if err != nil {
+		s.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	s.writeJSON(w, resources)
+}
+
 func (s *Server) handleListResources(w http.ResponseWriter, r *http.Request) {
 	kind := chi.URLParam(r, "kind")
 	namespace := r.URL.Query().Get("namespace")
@@ -198,6 +220,7 @@ func (s *Server) handleListResources(w http.ResponseWriter, r *http.Request) {
 	var result any
 	var err error
 
+	// Try typed cache for known resource types first
 	switch kind {
 	case "pods":
 		if namespace != "" {
@@ -247,15 +270,58 @@ func (s *Server) handleListResources(w http.ResponseWriter, r *http.Request) {
 		} else {
 			result, err = cache.ConfigMaps().List(labels.Everything())
 		}
+	case "secrets":
+		if namespace != "" {
+			result, err = cache.Secrets().Secrets(namespace).List(labels.Everything())
+		} else {
+			result, err = cache.Secrets().List(labels.Everything())
+		}
 	case "events":
 		if namespace != "" {
 			result, err = cache.Events().Events(namespace).List(labels.Everything())
 		} else {
 			result, err = cache.Events().List(labels.Everything())
 		}
+	case "persistentvolumeclaims", "pvcs":
+		if namespace != "" {
+			result, err = cache.PersistentVolumeClaims().PersistentVolumeClaims(namespace).List(labels.Everything())
+		} else {
+			result, err = cache.PersistentVolumeClaims().List(labels.Everything())
+		}
+	case "jobs":
+		if namespace != "" {
+			result, err = cache.Jobs().Jobs(namespace).List(labels.Everything())
+		} else {
+			result, err = cache.Jobs().List(labels.Everything())
+		}
+	case "cronjobs":
+		if namespace != "" {
+			result, err = cache.CronJobs().CronJobs(namespace).List(labels.Everything())
+		} else {
+			result, err = cache.CronJobs().List(labels.Everything())
+		}
+	case "hpas", "horizontalpodautoscalers":
+		if namespace != "" {
+			result, err = cache.HorizontalPodAutoscalers().HorizontalPodAutoscalers(namespace).List(labels.Everything())
+		} else {
+			result, err = cache.HorizontalPodAutoscalers().List(labels.Everything())
+		}
+	case "nodes":
+		result, err = cache.Nodes().List(labels.Everything())
+	case "namespaces":
+		result, err = cache.Namespaces().List(labels.Everything())
 	default:
-		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("Unknown resource kind: %s", kind))
-		return
+		// Fall back to dynamic cache for CRDs and other unknown resources
+		result, err = cache.ListDynamic(r.Context(), kind, namespace)
+		if err != nil {
+			// Check if it's an unknown resource error
+			if strings.Contains(err.Error(), "unknown resource kind") {
+				s.writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			s.writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	if err != nil {
@@ -286,6 +352,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *http.Request) {
 	var resource any
 	var err error
 
+	// Try typed cache for known resource types first
 	switch kind {
 	case "pods", "pod":
 		resource, err = cache.Pods().Pods(namespace).Get(name)
@@ -305,15 +372,33 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *http.Request) {
 		resource, err = cache.ConfigMaps().ConfigMaps(namespace).Get(name)
 	case "secrets", "secret":
 		resource, err = cache.Secrets().Secrets(namespace).Get(name)
-	case "hpas", "hpa", "horizontalpodautoscaler":
+	case "persistentvolumeclaims", "persistentvolumeclaim", "pvcs", "pvc":
+		resource, err = cache.PersistentVolumeClaims().PersistentVolumeClaims(namespace).Get(name)
+	case "hpas", "hpa", "horizontalpodautoscaler", "horizontalpodautoscalers":
 		resource, err = cache.HorizontalPodAutoscalers().HorizontalPodAutoscalers(namespace).Get(name)
 	case "jobs", "job":
 		resource, err = cache.Jobs().Jobs(namespace).Get(name)
 	case "cronjobs", "cronjob":
 		resource, err = cache.CronJobs().CronJobs(namespace).Get(name)
+	case "nodes", "node":
+		resource, err = cache.Nodes().Get(name)
+	case "namespaces", "namespace":
+		resource, err = cache.Namespaces().Get(name)
 	default:
-		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("Unknown resource kind: %s", kind))
-		return
+		// Fall back to dynamic cache for CRDs and other unknown resources
+		resource, err = cache.GetDynamic(r.Context(), kind, namespace, name)
+		if err != nil {
+			if strings.Contains(err.Error(), "unknown resource kind") {
+				s.writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			if strings.Contains(err.Error(), "not found") {
+				s.writeError(w, http.StatusNotFound, err.Error())
+				return
+			}
+			s.writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 
 	if err != nil {
@@ -468,6 +553,36 @@ func (s *Server) handleChanges(w http.ResponseWriter, r *http.Request) {
 						continue
 					}
 
+					// Try to get owner info from the involved object
+					var owner *k8s.OwnerInfo
+					if e.InvolvedObject.Kind == "Pod" {
+						// Look up the pod to get its owner
+						if pod, podErr := cache.Pods().Pods(e.Namespace).Get(e.InvolvedObject.Name); podErr == nil && pod != nil {
+							for _, ref := range pod.OwnerReferences {
+								if ref.Controller != nil && *ref.Controller {
+									owner = &k8s.OwnerInfo{
+										Kind: ref.Kind,
+										Name: ref.Name,
+									}
+									break
+								}
+							}
+						}
+					} else if e.InvolvedObject.Kind == "ReplicaSet" {
+						// Look up the ReplicaSet to get its owner (usually Deployment)
+						if rs, rsErr := cache.ReplicaSets().ReplicaSets(e.Namespace).Get(e.InvolvedObject.Name); rsErr == nil && rs != nil {
+							for _, ref := range rs.OwnerReferences {
+								if ref.Controller != nil && *ref.Controller {
+									owner = &k8s.OwnerInfo{
+										Kind: ref.Kind,
+										Name: ref.Name,
+									}
+									break
+								}
+							}
+						}
+					}
+
 					timeline = append(timeline, TimelineEvent{
 						ID:        string(e.UID),
 						Type:      "k8s_event",
@@ -479,6 +594,7 @@ func (s *Server) handleChanges(w http.ResponseWriter, r *http.Request) {
 						Message:   e.Message,
 						EventType: e.Type,
 						Count:     e.Count,
+						Owner:     owner,
 					})
 				}
 			}

@@ -1,0 +1,212 @@
+import { useState, useMemo } from 'react'
+import { Package, Search, RefreshCw, ArrowUpCircle } from 'lucide-react'
+import { clsx } from 'clsx'
+import { useHelmReleases, useHelmBatchUpgradeInfo } from '../../api/client'
+import type { HelmRelease, SelectedHelmRelease, UpgradeInfo } from '../../types'
+import { getStatusColor, formatAge, truncate } from './helm-utils'
+import { Tooltip } from '../ui/Tooltip'
+
+interface HelmViewProps {
+  namespace: string
+  selectedRelease?: SelectedHelmRelease | null
+  onReleaseClick?: (namespace: string, name: string) => void
+}
+
+export function HelmView({ namespace, selectedRelease, onReleaseClick }: HelmViewProps) {
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const { data: releases, isLoading, refetch } = useHelmReleases(namespace || undefined)
+
+  // Lazy load upgrade info after releases are loaded
+  const { data: upgradeInfo, isLoading: upgradeLoading } = useHelmBatchUpgradeInfo(
+    namespace || undefined,
+    Boolean(releases && releases.length > 0)
+  )
+
+  const isFullyLoaded = !isLoading && !upgradeLoading
+
+  // Filter releases by search term
+  const filteredReleases = useMemo(() => {
+    if (!releases) return []
+    if (!searchTerm) return releases
+    const term = searchTerm.toLowerCase()
+    return releases.filter(
+      (r) =>
+        r.name.toLowerCase().includes(term) ||
+        r.namespace.toLowerCase().includes(term) ||
+        r.chart.toLowerCase().includes(term)
+    )
+  }, [releases, searchTerm])
+
+  return (
+    <div className="flex h-full">
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* Toolbar */}
+        <div className="flex items-center gap-4 px-4 py-3 border-b border-slate-700 bg-slate-800/50 shrink-0">
+          <div className="flex items-center gap-2 text-slate-400">
+            <Package className="w-5 h-5" />
+            <span className="font-medium">Helm Releases</span>
+            {releases && (
+              <span className="text-xs bg-slate-700 px-2 py-0.5 rounded">
+                {releases.length}
+              </span>
+            )}
+            {!isFullyLoaded && (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-500" />
+            )}
+          </div>
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Search releases..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full max-w-md pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg"
+            title="Refresh"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full text-slate-500">
+              Loading...
+            </div>
+          ) : filteredReleases.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-slate-500 gap-2">
+              <Package className="w-12 h-12 text-slate-600" />
+              <span>No Helm releases found</span>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="text-indigo-400 hover:text-indigo-300 text-sm"
+                >
+                  Clear search
+                </button>
+              )}
+            </div>
+          ) : (
+            <table className="w-full table-fixed">
+              <thead className="bg-slate-800 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide">
+                    Name
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide w-32">
+                    Namespace
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide w-48">
+                    Chart
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide w-24 hidden xl:table-cell">
+                    App Version
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide w-28">
+                    Status
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide w-20">
+                    Rev
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-slate-400 uppercase tracking-wide w-24">
+                    Updated
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/50">
+                {filteredReleases.map((release) => (
+                  <ReleaseRow
+                    key={`${release.namespace}-${release.name}`}
+                    release={release}
+                    upgradeInfo={upgradeInfo?.releases[`${release.namespace}/${release.name}`]}
+                    isSelected={
+                      selectedRelease?.namespace === release.namespace &&
+                      selectedRelease?.name === release.name
+                    }
+                    onClick={() => onReleaseClick?.(release.namespace, release.name)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface ReleaseRowProps {
+  release: HelmRelease
+  upgradeInfo?: UpgradeInfo
+  isSelected: boolean
+  onClick: () => void
+}
+
+function ReleaseRow({ release, upgradeInfo, isSelected, onClick }: ReleaseRowProps) {
+  return (
+    <tr
+      onClick={onClick}
+      className={clsx(
+        'cursor-pointer transition-colors',
+        isSelected
+          ? 'bg-indigo-500/20 hover:bg-indigo-500/30'
+          : 'hover:bg-slate-800/50'
+      )}
+    >
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Package className="w-4 h-4 text-slate-500 flex-shrink-0" />
+          <span className="text-sm text-white font-medium truncate">{release.name}</span>
+          {upgradeInfo?.updateAvailable && (
+            <Tooltip content={`Upgrade available: ${release.chartVersion} → ${upgradeInfo.latestVersion}`}>
+              <span className="flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0">
+                <ArrowUpCircle className="w-3 h-3" />
+              </span>
+            </Tooltip>
+          )}
+        </div>
+      </td>
+      <td className="px-4 py-3 w-32">
+        <span className="text-sm text-slate-400">{release.namespace}</span>
+      </td>
+      <td className="px-4 py-3 w-48">
+        <Tooltip content={`${release.chart}-${release.chartVersion}`}>
+          <span className="text-sm text-slate-400 truncate block">
+            {truncate(`${release.chart}-${release.chartVersion}`, 35)}
+          </span>
+        </Tooltip>
+      </td>
+      <td className="px-4 py-3 w-24 hidden xl:table-cell">
+        <span className="text-sm text-slate-400">{release.appVersion || '-'}</span>
+      </td>
+      <td className="px-4 py-3 w-28">
+        <span
+          className={clsx(
+            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+            getStatusColor(release.status)
+          )}
+        >
+          {release.status}
+        </span>
+      </td>
+      <td className="px-4 py-3 w-20">
+        <span className="text-sm text-slate-400">{release.revision}</span>
+      </td>
+      <td className="px-4 py-3 w-24">
+        <Tooltip content={release.updated}>
+          <span className="text-sm text-slate-400">
+            {formatAge(release.updated)}
+          </span>
+        </Tooltip>
+      </td>
+    </tr>
+  )
+}
