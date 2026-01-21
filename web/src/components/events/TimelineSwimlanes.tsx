@@ -662,7 +662,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
               {routineEventCount} routine event{routineEventCount !== 1 ? 's' : ''} hidden.{' '}
               <button
                 onClick={() => setShowRoutineUpdates(true)}
-                className="text-indigo-400 hover:text-indigo-300 underline"
+                className="text-blue-400 hover:text-blue-300 underline"
               >
                 Show them
               </button>
@@ -692,7 +692,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search... (/ or ⌘K)"
-              className="w-80 pl-9 pr-8 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-80 pl-9 pr-8 py-1.5 text-sm bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {searchTerm && (
               <button
@@ -725,7 +725,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
             {panOffset > 0 && (
               <button
                 onClick={() => setPanOffset(0)}
-                className="px-2 py-1 text-xs text-indigo-400 hover:text-indigo-300 hover:bg-slate-700 rounded"
+                className="px-2 py-1 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-700 rounded"
                 title="Jump to current time"
               >
                 → Now
@@ -762,7 +762,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
                 type="checkbox"
                 checked={showRoutineUpdates}
                 onChange={(e) => setShowRoutineUpdates(e.target.checked)}
-                className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+                className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
               />
               <span>Show routine events ({routineEventCount})</span>
             </label>
@@ -871,7 +871,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
                               </span>
                             )}
                           </div>
-                          <div className="text-sm text-white break-words group-hover:text-indigo-300">
+                          <div className="text-sm text-white break-words group-hover:text-blue-300">
                             {lane.name}
                           </div>
                           <div className="text-xs text-slate-500">{lane.namespace}</div>
@@ -912,7 +912,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
 
                   {/* Child lanes (when expanded) - includes parent as first row */}
                   {isExpanded && hasChildren && (
-                    <div className="border-l-2 border-indigo-500/40 ml-3 bg-slate-800/30">
+                    <div className="border-l-2 border-blue-500/40 ml-3 bg-slate-800/30">
                       {/* Parent's own events as first row (only if it has events) */}
                       {lane.events.length > 0 && (
                         <div className="border-b border-slate-700/30">
@@ -927,7 +927,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
                                     {lane.kind}
                                   </span>
                                 </div>
-                                <div className="text-sm text-slate-300 break-words group-hover:text-indigo-300">
+                                <div className="text-sm text-slate-300 break-words group-hover:text-blue-300">
                                   {lane.name}
                                 </div>
                               </div>
@@ -969,7 +969,7 @@ export function TimelineSwimlanes({ events, isLoading, filterTimeRange: _filterT
                                     {child.kind}
                                   </span>
                                 </div>
-                                <div className="text-sm text-slate-300 break-words group-hover:text-indigo-300">
+                                <div className="text-sm text-slate-300 break-words group-hover:text-blue-300">
                                   {child.name}
                                 </div>
                               </div>

@@ -74,7 +74,7 @@ export const EventsTray = memo(function EventsTray({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
         <h2 className="font-semibold text-white flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-indigo-400" />
+          <AlertCircle className="w-4 h-4 text-blue-400" />
           Events
           <span className="text-xs text-slate-400 font-normal">
             ({events.length})

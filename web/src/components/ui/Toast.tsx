@@ -97,10 +97,10 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       {/* Icon */}
       <div className={clsx(
         'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
-        toast.type === 'success' ? 'bg-green-500/20' : 'bg-indigo-500/20'
+        toast.type === 'success' ? 'bg-green-500/20' : 'bg-blue-500/20'
       )}>
         {toast.command ? (
-          <Terminal className={clsx('w-4 h-4', toast.type === 'success' ? 'text-green-400' : 'text-indigo-400')} />
+          <Terminal className={clsx('w-4 h-4', toast.type === 'success' ? 'text-green-400' : 'text-blue-400')} />
         ) : (
           <Check className="w-4 h-4 text-green-400" />
         )}

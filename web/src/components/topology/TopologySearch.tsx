@@ -245,7 +245,7 @@ export function TopologySearch({ nodes, onNodeSelect, onZoomToNode }: TopologySe
                   >
                     <div className={clsx(
                       'flex items-center justify-center w-8 h-8 rounded-lg',
-                      isSelected ? 'bg-indigo-500/20' : 'bg-slate-700/50'
+                      isSelected ? 'bg-blue-500/20' : 'bg-slate-700/50'
                     )}>
                       <Icon className={clsx('w-4 h-4', getKindColor(node.kind))} />
                     </div>

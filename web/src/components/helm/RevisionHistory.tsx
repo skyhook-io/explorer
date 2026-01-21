@@ -42,8 +42,8 @@ export function RevisionHistory({ history, currentRevision, onViewRevision, onCo
     <div className="p-4">
       {/* Compare mode indicator */}
       {selectedForCompare !== null && (
-        <div className="mb-4 p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-lg flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-indigo-300">
+        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-blue-300">
             <GitCompare className="w-4 h-4" />
             <span>Select another revision to compare with revision {selectedForCompare}</span>
           </div>
@@ -70,7 +70,7 @@ export function RevisionHistory({ history, currentRevision, onViewRevision, onCo
                 isCurrent
                   ? 'border-green-500/50'
                   : isSelectedForCompare
-                  ? 'border-indigo-500/50 bg-indigo-500/10'
+                  ? 'border-blue-500/50 bg-blue-500/10'
                   : 'border-transparent hover:border-slate-600'
               )}
             >
@@ -129,7 +129,7 @@ export function RevisionHistory({ history, currentRevision, onViewRevision, onCo
                       className={clsx(
                         'flex items-center gap-1 px-2 py-1 text-xs rounded',
                         isSelectedForCompare
-                          ? 'bg-indigo-500 text-white'
+                          ? 'bg-blue-500 text-white'
                           : 'text-slate-400 hover:text-white hover:bg-slate-700'
                       )}
                     >

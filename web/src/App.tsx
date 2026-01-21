@@ -9,7 +9,7 @@ import { HelmView } from './components/helm/HelmView'
 import { HelmReleaseDrawer } from './components/helm/HelmReleaseDrawer'
 import { useEventSource } from './hooks/useEventSource'
 import { useClusterInfo, useNamespaces } from './api/client'
-import { ChevronDown, RefreshCw, Layers, FolderTree, Network, List, Clock, Package } from 'lucide-react'
+import { ChevronDown, RefreshCw, FolderTree, Network, List, Clock, Package } from 'lucide-react'
 import type { TopologyNode, GroupingMode, MainView, SelectedResource, SelectedHelmRelease, NodeKind, Topology } from './types'
 
 // All possible node kinds
@@ -276,14 +276,14 @@ function App() {
       <header className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
         {/* Left: Logo + Cluster info */}
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Layers className="w-5 h-5 text-indigo-400" />
-            <span className="hidden sm:inline">Skyhook Explorer</span>
+          <h1 className="flex items-center gap-1.5">
+            <img src="/assets/skyhook/logotype-white-color.svg" alt="Skyhook" className="h-5 w-auto" />
+            <span className="text-xl font-normal text-white">Explorer</span>
           </h1>
 
           {clusterInfo && (
             <div className="flex items-center gap-2">
-              <span className="px-2 py-1 bg-slate-700 rounded text-sm font-medium text-indigo-300" title={clusterInfo.context || clusterInfo.cluster}>
+              <span className="px-2 py-1 bg-slate-700 rounded text-sm font-medium text-blue-300" title={clusterInfo.context || clusterInfo.cluster}>
                 {clusterInfo.context || clusterInfo.cluster}
               </span>
               <span className="text-xs text-slate-500 hidden lg:inline">
@@ -319,7 +319,7 @@ function App() {
             onClick={() => setMainView('topology')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors ${
               mainView === 'topology'
-                ? 'bg-indigo-500 text-white'
+                ? 'bg-blue-500 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-600'
             }`}
           >
@@ -330,7 +330,7 @@ function App() {
             onClick={() => setMainView('resources')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors ${
               mainView === 'resources'
-                ? 'bg-indigo-500 text-white'
+                ? 'bg-blue-500 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-600'
             }`}
           >
@@ -341,7 +341,7 @@ function App() {
             onClick={() => setMainView('events')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors ${
               mainView === 'events'
-                ? 'bg-indigo-500 text-white'
+                ? 'bg-blue-500 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-600'
             }`}
           >
@@ -352,7 +352,7 @@ function App() {
             onClick={() => setMainView('helm')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors ${
               mainView === 'helm'
-                ? 'bg-indigo-500 text-white'
+                ? 'bg-blue-500 text-white'
                 : 'text-slate-400 hover:text-white hover:bg-slate-600'
             }`}
           >
@@ -368,7 +368,7 @@ function App() {
             <select
               value={namespace}
               onChange={(e) => setNamespace(e.target.value)}
-              className="appearance-none bg-slate-700 text-white text-xs rounded px-2 py-1 pr-6 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-w-[100px]"
+              className="appearance-none bg-slate-700 text-white text-xs rounded px-2 py-1 pr-6 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500 min-w-[100px]"
             >
               <option value="">All Namespaces</option>
               {namespaces?.map((ns) => (
@@ -429,7 +429,7 @@ function App() {
                     onClick={() => setTopologyMode('full')}
                     className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
                       topologyMode === 'full'
-                        ? 'bg-indigo-500 text-white'
+                        ? 'bg-blue-500 text-white'
                         : 'text-slate-400 hover:text-white hover:bg-slate-700'
                     }`}
                   >
@@ -439,7 +439,7 @@ function App() {
                     onClick={() => setTopologyMode('traffic')}
                     className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
                       topologyMode === 'traffic'
-                        ? 'bg-indigo-500 text-white'
+                        ? 'bg-blue-500 text-white'
                         : 'text-slate-400 hover:text-white hover:bg-slate-700'
                     }`}
                   >

@@ -207,9 +207,9 @@ export function HelmReleaseDrawer({ release, onClose, onNavigateToResource }: He
       <div
         onMouseDown={handleResizeStart}
         className={clsx(
-          'absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 hover:bg-indigo-500/50 transition-colors',
+          'absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 hover:bg-blue-500/50 transition-colors',
           'hidden sm:block',
-          isResizing && 'bg-indigo-500/50'
+          isResizing && 'bg-blue-500/50'
         )}
       />
 

@@ -382,7 +382,7 @@ function KindBadge({ kind }: { kind: string }) {
   const colors: Record<string, string> = {
     Deployment: 'bg-blue-900/50 text-blue-400',
     StatefulSet: 'bg-purple-900/50 text-purple-400',
-    DaemonSet: 'bg-indigo-900/50 text-indigo-400',
+    DaemonSet: 'bg-blue-900/50 text-blue-400',
     Service: 'bg-cyan-900/50 text-cyan-400',
     Pod: 'bg-green-900/50 text-green-400',
     ReplicaSet: 'bg-violet-900/50 text-violet-400',
@@ -422,7 +422,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       className={clsx(
         'flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors',
         active
-          ? 'text-white border-indigo-500'
+          ? 'text-white border-blue-500'
           : 'text-slate-400 border-transparent hover:text-white hover:border-slate-600'
       )}
     >
@@ -825,7 +825,7 @@ function LogsTab({
               className={clsx(
                 'px-3 py-1.5 text-sm rounded-lg whitespace-nowrap transition-colors',
                 selectedPod === pod.name
-                  ? 'bg-indigo-500 text-white'
+                  ? 'bg-blue-500 text-white'
                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
               )}
             >
@@ -916,7 +916,7 @@ function PodLogsPanel({
             onClick={() => setFollow(!follow)}
             className={clsx(
               'px-2 py-1 text-xs rounded transition-colors',
-              follow ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'
+              follow ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'
             )}
           >
             {follow ? 'Following' : 'Follow'}
@@ -1020,7 +1020,7 @@ function EventsTab({
               type="checkbox"
               checked={showRoutine}
               onChange={(e) => onToggleRoutine(e.target.checked)}
-              className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 text-indigo-500"
+              className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 text-blue-500"
             />
             {showRoutine ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             Show routine events ({routineCount})

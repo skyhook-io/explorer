@@ -63,7 +63,7 @@ export function HelmView({ namespace, selectedRelease, onReleaseClick }: HelmVie
               placeholder="Search releases..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full max-w-md pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full max-w-md pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <button
@@ -88,7 +88,7 @@ export function HelmView({ namespace, selectedRelease, onReleaseClick }: HelmVie
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
-                  className="text-indigo-400 hover:text-indigo-300 text-sm"
+                  className="text-blue-400 hover:text-blue-300 text-sm"
                 >
                   Clear search
                 </button>
@@ -157,7 +157,7 @@ function ReleaseRow({ release, upgradeInfo, isSelected, onClick }: ReleaseRowPro
       className={clsx(
         'cursor-pointer transition-colors',
         isSelected
-          ? 'bg-indigo-500/20 hover:bg-indigo-500/30'
+          ? 'bg-blue-500/20 hover:bg-blue-500/30'
           : 'hover:bg-slate-800/50'
       )}
     >

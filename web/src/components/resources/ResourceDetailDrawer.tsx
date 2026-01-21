@@ -143,9 +143,9 @@ export function ResourceDetailDrawer({ resource, onClose, onNavigate }: Resource
       <div
         onMouseDown={handleResizeStart}
         className={clsx(
-          'absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 hover:bg-indigo-500/50 transition-colors',
+          'absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize z-10 hover:bg-blue-500/50 transition-colors',
           'hidden sm:block', // Hide on mobile
-          isResizing && 'bg-indigo-500/50'
+          isResizing && 'bg-blue-500/50'
         )}
       />
 
@@ -223,7 +223,7 @@ function DrawerHeader({ resource, resourceData, showYaml, setShowYaml, isRefetch
             onClick={() => setShowYaml(!showYaml)}
             className={clsx(
               'px-2 py-1 text-xs rounded transition-colors',
-              showYaml ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              showYaml ? 'bg-blue-500 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
             )}
             title="Toggle YAML view"
           >

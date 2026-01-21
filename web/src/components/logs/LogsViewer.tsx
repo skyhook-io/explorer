@@ -153,7 +153,7 @@ export function LogsViewer({ namespace, podName, containers, initialContainer }:
             <select
               value={selectedContainer}
               onChange={(e) => setSelectedContainer(e.target.value)}
-              className="appearance-none bg-slate-700 text-white text-xs rounded px-2 py-1.5 pr-6 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="appearance-none bg-slate-700 text-white text-xs rounded px-2 py-1.5 pr-6 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
               {containers.map(c => (
                 <option key={c} value={c}>{c}</option>
@@ -193,7 +193,7 @@ export function LogsViewer({ namespace, podName, containers, initialContainer }:
             type="checkbox"
             checked={showPrevious}
             onChange={(e) => setShowPrevious(e.target.checked)}
-            className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+            className="w-3 h-3 rounded border-slate-600 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
           />
           <span>Previous</span>
         </label>
@@ -202,7 +202,7 @@ export function LogsViewer({ namespace, podName, containers, initialContainer }:
         <select
           value={tailLines}
           onChange={(e) => setTailLines(Number(e.target.value))}
-          className="appearance-none bg-slate-700 text-white text-xs rounded px-2 py-1.5 pr-5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="appearance-none bg-slate-700 text-white text-xs rounded px-2 py-1.5 pr-5 border border-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           <option value={100}>100 lines</option>
           <option value={500}>500 lines</option>
@@ -216,7 +216,7 @@ export function LogsViewer({ namespace, podName, containers, initialContainer }:
         <button
           onClick={() => setShowSearch(!showSearch)}
           className={`p-1.5 rounded transition-colors ${
-            showSearch ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
+            showSearch ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-700'
           }`}
           title="Search logs"
         >
@@ -297,7 +297,7 @@ export function LogsViewer({ namespace, podName, containers, initialContainer }:
               logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight
             }
           }}
-          className="absolute bottom-4 right-4 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-full shadow-lg hover:bg-indigo-700"
+          className="absolute bottom-4 right-4 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-full shadow-lg hover:bg-blue-700"
         >
           Scroll to bottom
         </button>

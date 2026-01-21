@@ -248,7 +248,7 @@ export const K8sResourceNode = memo(function K8sResourceNode({
           'bg-slate-800 border border-slate-600',
           'shadow-md shadow-black/20',
           'transition-all duration-150',
-          selected && 'ring-2 ring-indigo-400 border-indigo-400',
+          selected && 'ring-2 ring-blue-400 border-blue-400',
           isSmallNode ? 'opacity-90' : ''
         )}
         style={{

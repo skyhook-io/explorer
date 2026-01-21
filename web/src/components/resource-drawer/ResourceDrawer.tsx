@@ -27,7 +27,7 @@ function getStatusBadge(status: HealthStatus) {
 function getKindBadge(kind: NodeKind): string {
   switch (kind) {
     case 'Internet':
-      return 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+      return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
     case 'Ingress':
       return 'bg-violet-500/20 text-violet-400 border-violet-500/30'
     case 'Service':
@@ -225,7 +225,7 @@ export const ResourceDrawer = memo(function ResourceDrawer({
               // TODO: Open kubectl command or link to dashboard
               console.log('View in dashboard:', node)
             }}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
           >
             <ExternalLink className="w-4 h-4" />
             View Full Resource

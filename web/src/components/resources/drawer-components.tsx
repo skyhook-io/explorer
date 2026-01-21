@@ -222,7 +222,7 @@ export function getKindColor(kind: string): string {
   if (k.includes('cronjob')) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
   if (k.includes('job')) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
   if (k.includes('node')) return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-  if (k.includes('namespace')) return 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30'
+  if (k.includes('namespace')) return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
   if (k.includes('persistentvolume')) return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
   // Default color for CRDs - use a distinctive purple/magenta color
   return 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30'

@@ -184,7 +184,7 @@ export function EventsTimeline({ namespace, onViewChange, currentView = 'list', 
             placeholder="Search... (/ or ⌘K)"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full max-w-md pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full max-w-md pl-10 pr-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -224,7 +224,7 @@ export function EventsTimeline({ namespace, onViewChange, currentView = 'list', 
         <select
           value={kindFilter}
           onChange={(e) => setKindFilter(e.target.value)}
-          className="appearance-none bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="appearance-none bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Kinds</option>
           {RESOURCE_KINDS.map((kind) => (
@@ -238,7 +238,7 @@ export function EventsTimeline({ namespace, onViewChange, currentView = 'list', 
         <select
           value={timeRange}
           onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-          className="appearance-none bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="appearance-none bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           {TIME_RANGES.map((range) => (
             <option key={range.value} value={range.value}>
@@ -450,7 +450,7 @@ function EventCard({ event, expanded, onToggle, onResourceClick }: EventCardProp
                 <span className="text-xs px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 group-hover:bg-slate-600">
                   {event.kind}
                 </span>
-                <span className="text-sm font-medium text-white truncate group-hover:text-indigo-300">{event.name}</span>
+                <span className="text-sm font-medium text-white truncate group-hover:text-blue-300">{event.name}</span>
               </button>
               {event.namespace && <span className="text-xs text-slate-500">in {event.namespace}</span>}
             </div>

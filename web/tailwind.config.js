@@ -7,8 +7,22 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Skyhook brand colors
+        'skyhook': {
+          DEFAULT: '#2D7AFF',
+          50: '#E6F0FF',
+          100: '#CCE0FF',
+          200: '#99C2FF',
+          300: '#66A3FF',
+          400: '#3385FF',
+          500: '#2D7AFF',
+          600: '#0052CC',
+          700: '#003D99',
+          800: '#002966',
+          900: '#001433',
+        },
         // K8s resource type colors
-        'k8s-internet': '#6366f1',
+        'k8s-internet': '#2D7AFF',
         'k8s-ingress': '#8b5cf6',
         'k8s-service': '#3b82f6',
         'k8s-deployment': '#10b981',

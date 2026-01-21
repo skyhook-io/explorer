@@ -35,7 +35,7 @@ export const GroupNode = memo(function GroupNode({
   const getBorderColor = () => {
     switch (type) {
       case 'namespace':
-        return 'border-indigo-500/40'
+        return 'border-blue-500/40'
       case 'app':
         return 'border-emerald-500/40'
       case 'label':
@@ -48,7 +48,7 @@ export const GroupNode = memo(function GroupNode({
   const getHeaderBgColor = () => {
     switch (type) {
       case 'namespace':
-        return 'bg-indigo-500/20'
+        return 'bg-blue-500/20'
       case 'app':
         return 'bg-emerald-500/20'
       case 'label':
@@ -61,7 +61,7 @@ export const GroupNode = memo(function GroupNode({
   const getLabelColor = () => {
     switch (type) {
       case 'namespace':
-        return 'text-indigo-300'
+        return 'text-blue-300'
       case 'app':
         return 'text-emerald-300'
       case 'label':
@@ -74,7 +74,7 @@ export const GroupNode = memo(function GroupNode({
   const getIconColor = () => {
     switch (type) {
       case 'namespace':
-        return 'text-indigo-400'
+        return 'text-blue-400'
       case 'app':
         return 'text-emerald-400'
       case 'label':
