@@ -26,3 +26,4 @@ internal/static/dist/assets/
 # Local config
 .env
 .env.local
+dist/

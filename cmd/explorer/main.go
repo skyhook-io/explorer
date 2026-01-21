@@ -24,7 +24,7 @@ func main() {
 	// Parse flags
 	kubeconfig := flag.String("kubeconfig", "", "Path to kubeconfig file (default: ~/.kube/config)")
 	namespace := flag.String("namespace", "", "Initial namespace filter (empty = all namespaces)")
-	port := flag.Int("port", 8080, "Server port")
+	port := flag.Int("port", 9280, "Server port")
 	noBrowser := flag.Bool("no-browser", false, "Don't auto-open browser")
 	devMode := flag.Bool("dev", false, "Development mode (serve frontend from filesystem)")
 	showVersion := flag.Bool("version", false, "Show version and exit")

@@ -39,14 +39,14 @@ restart: frontend embed backend kill
 	@sleep 1
 	./explorer --kubeconfig ~/.kube/config --no-browser --persist-history &
 	@sleep 4
-	@echo "Server running at http://localhost:8080"
+	@echo "Server running at http://localhost:9280"
 
 # Frontend-only rebuild and restart (faster - no Go recompile)
 restart-fe: frontend embed kill
 	@sleep 1
 	./explorer --kubeconfig ~/.kube/config --no-browser --persist-history &
 	@sleep 4
-	@echo "Server running at http://localhost:8080"
+	@echo "Server running at http://localhost:9280"
 
 # Hot reload development (run both in separate terminals)
 # Terminal 1: make watch-frontend
@@ -55,8 +55,8 @@ dev:
 	@echo "=== Development Mode ==="
 	@echo ""
 	@echo "Run these in separate terminals:"
-	@echo "  Terminal 1: make watch-frontend  (Vite dev server on :5173)"
-	@echo "  Terminal 2: make watch-backend   (Go with air on :8080)"
+	@echo "  Terminal 1: make watch-frontend  (Vite dev server on :9273)"
+	@echo "  Terminal 2: make watch-backend   (Go with air on :9280)"
 	@echo ""
 	@echo "Frontend proxies API calls to backend automatically."
 
@@ -81,7 +81,7 @@ run-dev:
 
 # Kill any running explorer process
 kill:
-	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:9280 | xargs kill -9 2>/dev/null || true
 
 # Install all dependencies
 deps:
@@ -139,8 +139,8 @@ help:
 	@echo "  make restart    - Rebuild and restart server"
 	@echo ""
 	@echo "Development (hot reload):"
-	@echo "  make watch-frontend  - Vite dev server with HMR (port 5173)"
-	@echo "  make watch-backend   - Go with air hot reload (port 8080)"
+	@echo "  make watch-frontend  - Vite dev server with HMR (port 9273)"
+	@echo "  make watch-backend   - Go with air hot reload (port 9280)"
 	@echo ""
 	@echo "Run:"
 	@echo "  make run        - Run built binary"
