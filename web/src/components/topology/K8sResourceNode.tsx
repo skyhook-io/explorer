@@ -79,8 +79,8 @@ function getIcon(kind: NodeKind) {
   }
 }
 
-// Status bar color (left border)
-function getStatusBarColor(status: HealthStatus): string {
+// Status indicator color (for dot and left bar)
+function getStatusDotColor(status: HealthStatus): string {
   switch (status) {
     case 'healthy':
       return 'bg-green-500'
@@ -90,6 +90,32 @@ function getStatusBarColor(status: HealthStatus): string {
       return 'bg-red-500'
     default:
       return 'bg-theme-hover'
+  }
+}
+
+// Border style for problem states - wraps entire card
+function getStatusBorderStyle(status: HealthStatus): React.CSSProperties {
+  switch (status) {
+    case 'degraded':
+      return { border: '2px solid rgb(234 179 8 / 0.6)' } // yellow-500/60
+    case 'unhealthy':
+      return { border: '2px solid rgb(239 68 68 / 0.7)' } // red-500/70
+    default:
+      return {}
+  }
+}
+
+// Background style for problem states - works in both light and dark mode
+function getStatusBgStyle(status: HealthStatus): React.CSSProperties {
+  switch (status) {
+    case 'degraded':
+      // Warm orange/yellow tint
+      return { backgroundColor: 'rgb(251 146 60 / 0.12)' } // orange-400/12
+    case 'unhealthy':
+      // Red tint
+      return { backgroundColor: 'rgb(248 113 113 / 0.15)' } // red-400/15
+    default:
+      return {}
   }
 }
 
@@ -245,23 +271,27 @@ export const K8sResourceNode = memo(function K8sResourceNode({
       <div
         className={clsx(
           'relative rounded-lg overflow-hidden',
-          'bg-theme-surface border border-theme-border-light',
-          'shadow-md shadow-black/20',
+          'bg-theme-surface topology-node-card',
           'transition-all duration-150',
-          selected && 'ring-2 ring-blue-400 border-blue-400',
+          selected && 'ring-2 ring-blue-400',
           isSmallNode ? 'opacity-90' : ''
         )}
         style={{
           minWidth: NODE_DIMENSIONS[kind]?.width || 180,
+          border: 'none',
+          ...getStatusBorderStyle(status),
+          ...getStatusBgStyle(status),
         }}
       >
-        {/* Status bar on left */}
-        <div
-          className={clsx(
-            'absolute left-0 top-0 bottom-0 w-1',
-            getStatusBarColor(status)
-          )}
-        />
+        {/* Status bar on left - only shown for healthy/unknown states */}
+        {(status === 'healthy' || status === 'unknown') && (
+          <div
+            className={clsx(
+              'absolute left-0 top-0 bottom-0 w-1',
+              getStatusDotColor(status)
+            )}
+          />
+        )}
 
         {/* Content */}
         <div className={clsx(
@@ -303,7 +333,7 @@ export const K8sResourceNode = memo(function K8sResourceNode({
               className={clsx(
                 canExpand || canCollapse ? '' : 'ml-auto',
                 'w-1.5 h-1.5 rounded-full',
-                getStatusBarColor(status)
+                getStatusDotColor(status)
               )}
             />
           </div>

@@ -152,6 +152,7 @@ interface TopologyGraphProps {
   topology: Topology | null
   viewMode: ViewMode
   groupingMode: GroupingMode
+  hideGroupHeader?: boolean
   onNodeClick: (node: TopologyNode) => void
   selectedNodeId?: string
 }
@@ -160,6 +161,7 @@ export function TopologyGraph({
   topology,
   viewMode,
   groupingMode,
+  hideGroupHeader = false,
   onNodeClick,
   selectedNodeId,
 }: TopologyGraphProps) {
@@ -310,7 +312,8 @@ export function TopologyGraph({
         groupMap,
         groupingMode,
         collapsedGroups,
-        handleToggleCollapse
+        handleToggleCollapse,
+        hideGroupHeader
       ).then(({ nodes: layoutedNodes }) => {
         // Add expand/collapse handlers to pod-related nodes
         const nodesWithHandlers = layoutedNodes.map(node => {
@@ -345,7 +348,7 @@ export function TopologyGraph({
     }
     // Note: When structure hasn't changed, nodes keep their positions
     // Data updates happen via selected state effect
-  }, [workingNodes, workingEdges, structureKey, groupingMode, collapsedGroups, handleToggleCollapse, isTrafficView, expandedPodGroups, handleExpandPodGroup, handleCollapsePodGroup, setNodes, setEdges])
+  }, [workingNodes, workingEdges, structureKey, groupingMode, hideGroupHeader, collapsedGroups, handleToggleCollapse, isTrafficView, expandedPodGroups, handleExpandPodGroup, handleCollapsePodGroup, setNodes, setEdges])
 
   // Handle node click
   const handleNodeClick = useCallback(

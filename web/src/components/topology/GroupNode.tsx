@@ -1,7 +1,6 @@
 import { memo } from 'react'
-import { NodeProps, Handle, Position } from '@xyflow/react'
+import { NodeProps, Handle, Position, useViewport } from '@xyflow/react'
 import { ChevronDown, ChevronRight, Box, Tag } from 'lucide-react'
-import { clsx } from 'clsx'
 
 interface GroupNodeData {
   type: 'namespace' | 'app' | 'label'
@@ -10,6 +9,7 @@ interface GroupNodeData {
   nodeCount: number
   collapsed: boolean
   onToggleCollapse: (groupId: string) => void
+  hideHeader?: boolean
 }
 
 export const GroupNode = memo(function GroupNode({
@@ -18,7 +18,7 @@ export const GroupNode = memo(function GroupNode({
   width,
   height,
 }: NodeProps & { data: GroupNodeData }) {
-  const { type, name, label, nodeCount, collapsed, onToggleCollapse } = data
+  const { type, name, label, nodeCount, collapsed, onToggleCollapse, hideHeader } = data
 
   const getIcon = () => {
     switch (type) {
@@ -32,59 +32,67 @@ export const GroupNode = memo(function GroupNode({
     }
   }
 
-  const getBorderColor = () => {
+  const getBorderStyle = (): React.CSSProperties => {
+    // Must set full 'border' property to override ReactFlow's --xy-node-border
     switch (type) {
       case 'namespace':
-        return 'border-blue-500/40'
+        return { border: '2px solid var(--group-border-namespace)' }
       case 'app':
-        return 'border-emerald-500/40'
+        return { border: '2px solid var(--group-border-app)' }
       case 'label':
-        return 'border-amber-500/40'
+        return { border: '2px solid var(--group-border-label)' }
       default:
-        return 'border-theme-border'
+        return { border: '2px solid var(--border-default)' }
     }
   }
 
-  const getHeaderBgColor = () => {
+  const getHeaderBgStyle = (): React.CSSProperties => {
     switch (type) {
       case 'namespace':
-        return 'bg-blue-500/20'
+        return { backgroundColor: 'var(--group-header-namespace)' }
       case 'app':
-        return 'bg-emerald-500/20'
+        return { backgroundColor: 'var(--group-header-app)' }
       case 'label':
-        return 'bg-amber-500/20'
+        return { backgroundColor: 'var(--group-header-label)' }
       default:
-        return 'bg-theme-hover/50'
+        return { backgroundColor: 'var(--bg-hover)' }
     }
   }
 
-  const getLabelColor = () => {
+  const getLabelStyle = (): React.CSSProperties => {
     switch (type) {
       case 'namespace':
-        return 'text-blue-300'
+        return { color: 'var(--group-label-namespace)' }
       case 'app':
-        return 'text-emerald-300'
+        return { color: 'var(--group-label-app)' }
       case 'label':
-        return 'text-amber-300'
+        return { color: 'var(--group-label-label)' }
       default:
-        return 'text-theme-text-secondary'
+        return { color: 'var(--text-secondary)' }
     }
   }
 
-  const getIconColor = () => {
+  const getIconStyle = (): React.CSSProperties => {
     switch (type) {
       case 'namespace':
-        return 'text-blue-400'
+        return { color: 'var(--group-icon-namespace)' }
       case 'app':
-        return 'text-emerald-400'
+        return { color: 'var(--group-icon-app)' }
       case 'label':
-        return 'text-amber-400'
+        return { color: 'var(--group-icon-label)' }
       default:
-        return 'text-theme-text-secondary'
+        return { color: 'var(--text-secondary)' }
     }
   }
 
   const Icon = getIcon()
+
+  // Get viewport zoom to scale header adaptively
+  // At low zoom (zoomed out), keep headers large for readability
+  // At high zoom (zoomed in), reduce header size so it's not comically large
+  // Start scaling down at zoom 0.5 for earlier reduction when zooming in
+  const { zoom } = useViewport()
+  const headerScale = Math.max(0.35, Math.min(1, 0.5 / zoom))
 
   // When collapsed, render as a compact card
   if (collapsed) {
@@ -97,17 +105,14 @@ export const GroupNode = memo(function GroupNode({
         />
 
         <div
-          className={clsx(
-            'rounded-xl border-2 p-4 cursor-pointer hover:border-opacity-70 transition-all',
-            getBorderColor(),
-            getHeaderBgColor()
-          )}
+          className="rounded-xl p-4 cursor-pointer transition-all"
           onClick={() => onToggleCollapse(id)}
+          style={{ transform: `scale(${headerScale})`, transformOrigin: 'top left', ...getBorderStyle(), ...getHeaderBgStyle() }}
         >
           <div className="flex items-center gap-4">
-            <ChevronRight className={clsx('w-8 h-8', getIconColor())} />
-            <Icon className={clsx('w-9 h-9', getIconColor())} />
-            <span className={clsx('text-4xl font-bold', getLabelColor())}>{name}</span>
+            <ChevronRight className="w-8 h-8" style={getIconStyle()} />
+            <Icon className="w-9 h-9" style={getIconStyle()} />
+            <span className="text-4xl font-bold" style={getLabelStyle()}>{name}</span>
             {label && (
               <span className="text-sm text-theme-text-secondary">({label})</span>
             )}
@@ -138,31 +143,54 @@ export const GroupNode = memo(function GroupNode({
 
       {/* Container with border - use explicit dimensions from props */}
       <div
-        className={clsx(
-          'absolute top-0 left-0 rounded-xl border-2 box-border isolate overflow-hidden',
-          getBorderColor(),
-          'bg-theme-surface/40'
-        )}
-        style={{ width: width || '100%', height: height || '100%' }}
+        className="absolute top-0 left-0 rounded-xl box-border isolate overflow-hidden bg-theme-surface/40"
+        style={{ width: width || '100%', height: height || '100%', ...getBorderStyle() }}
       >
-        {/* Header bar - no margin, let overflow-hidden clip to border radius */}
-        <div
-          className={clsx(
-            'flex items-center gap-4 px-6 py-5 cursor-pointer',
-            getHeaderBgColor()
-          )}
-          onClick={() => onToggleCollapse(id)}
-        >
-          <ChevronDown className={clsx('w-8 h-8 flex-shrink-0', getIconColor())} />
-          <Icon className={clsx('w-9 h-9 flex-shrink-0', getIconColor())} />
-          <span className={clsx('text-4xl font-bold truncate', getLabelColor())}>{name}</span>
-          {label && (
-            <span className="text-sm text-theme-text-secondary truncate">({label})</span>
-          )}
-          <span className="ml-auto flex-shrink-0 text-xl font-semibold text-theme-text-secondary bg-theme-surface/60 px-4 py-2 rounded-xl">
-            {nodeCount}
-          </span>
-        </div>
+        {/* Header bar - content scales based on zoom level for readability */}
+        {/* Hidden when hideHeader is true (single namespace view) */}
+        {!hideHeader && (
+          <div
+            className="flex items-center cursor-pointer"
+            onClick={() => onToggleCollapse(id)}
+            style={{
+              padding: `${20 * headerScale}px ${24 * headerScale}px`,
+              gap: `${16 * headerScale}px`,
+              ...getHeaderBgStyle()
+            }}
+          >
+            <ChevronDown
+              className="flex-shrink-0"
+              style={{ width: 32 * headerScale, height: 32 * headerScale, ...getIconStyle() }}
+            />
+            <Icon
+              className="flex-shrink-0"
+              style={{ width: 36 * headerScale, height: 36 * headerScale, ...getIconStyle() }}
+            />
+            <span
+              className="font-bold truncate"
+              style={{ fontSize: 36 * headerScale, ...getLabelStyle() }}
+            >
+              {name}
+            </span>
+            {label && (
+              <span
+                className="text-theme-text-secondary truncate"
+                style={{ fontSize: 14 * headerScale }}
+              >
+                ({label})
+              </span>
+            )}
+            <span
+              className="ml-auto flex-shrink-0 font-semibold text-theme-text-secondary bg-theme-surface/60 rounded-xl"
+              style={{
+                fontSize: 20 * headerScale,
+                padding: `${8 * headerScale}px ${16 * headerScale}px`
+              }}
+            >
+              {nodeCount}
+            </span>
+          </div>
+        )}
       </div>
 
       <Handle

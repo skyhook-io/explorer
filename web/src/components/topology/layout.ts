@@ -32,6 +32,14 @@ const GROUP_PADDING = {
   right: 30,
 }
 
+// Reduced padding when header is hidden (single namespace view)
+const GROUP_PADDING_NO_HEADER = {
+  top: 30,
+  left: 30,
+  bottom: 30,
+  right: 30,
+}
+
 interface ElkNode {
   id: string
   width?: number
@@ -395,7 +403,8 @@ export async function applyHierarchicalLayout(
   groupMap: Map<string, string[]>,
   groupingMode: GroupingMode,
   _collapsedGroups: Set<string>,
-  onToggleCollapse: (groupId: string) => void
+  onToggleCollapse: (groupId: string) => void,
+  hideGroupHeader: boolean = false
 ): Promise<{ nodes: Node[]; positions: Map<string, { x: number; y: number }> }> {
   try {
     // Step 1: Layout each group independently
@@ -416,13 +425,16 @@ export async function applyHierarchicalLayout(
       if (isGroup && child.children && child.children.length > 0) {
         // Layout this group independently
         const groupKey = child.id.replace(`group-${groupingMode}-`, '')
-        const minWidth = Math.max(500, groupKey.length * 16 + 200)
+        const minWidth = hideGroupHeader ? 300 : Math.max(500, groupKey.length * 16 + 200)
+
+        // Use reduced padding when header is hidden
+        const padding = hideGroupHeader ? GROUP_PADDING_NO_HEADER : GROUP_PADDING
 
         const groupGraph: ElkGraph = {
           id: child.id,
           layoutOptions: {
             ...elkOptionsGroup,
-            'elk.padding': `[left=${GROUP_PADDING.left}, top=${GROUP_PADDING.top}, right=${GROUP_PADDING.right}, bottom=${GROUP_PADDING.bottom}]`,
+            'elk.padding': `[left=${padding.left}, top=${padding.top}, right=${padding.right}, bottom=${padding.bottom}]`,
           },
           children: child.children,
           edges: elkGraph.edges.filter(e => {
@@ -434,8 +446,10 @@ export async function applyHierarchicalLayout(
 
         const layoutResult = await elk.layout(groupGraph) as ElkLayoutResult
 
-        // Enforce minimum width for header visibility
-        const finalWidth = Math.max(layoutResult.width || 300, minWidth)
+        // Enforce minimum width for header visibility (not needed when header hidden)
+        const finalWidth = hideGroupHeader
+          ? (layoutResult.width || 300)
+          : Math.max(layoutResult.width || 300, minWidth)
 
         groupLayouts.push({
           groupId: child.id,
@@ -477,8 +491,8 @@ export async function applyHierarchicalLayout(
     // Sort groups by height (tallest first) for better packing
     groupLayouts.sort((a, b) => b.height - a.height)
 
-    // Assign each group to the shortest column
-    const groupPositions: Array<{ groupId: string; x: number; y: number }> = []
+    // Assign each group to the shortest column - track column index directly
+    const groupPositions: Array<{ groupId: string; colIndex: number; y: number }> = []
 
     for (const group of groupLayouts) {
       // Find the column with minimum height
@@ -491,15 +505,9 @@ export async function applyHierarchicalLayout(
         }
       }
 
-      // Calculate x position based on column
-      let xOffset = 0
-      for (let i = 0; i < minColIndex; i++) {
-        xOffset += columnWidths[i] + columnGap
-      }
-
       groupPositions.push({
         groupId: group.groupId,
-        x: xOffset,
+        colIndex: minColIndex,
         y: columnHeights[minColIndex],
       })
 
@@ -508,23 +516,18 @@ export async function applyHierarchicalLayout(
       columnWidths[minColIndex] = Math.max(columnWidths[minColIndex], group.width)
     }
 
-    // Recalculate x positions now that we know final column widths
+    // Calculate final x positions using the tracked column index and final column widths
+    const groupFinalPositions: Array<{ groupId: string; x: number; y: number }> = []
     for (const pos of groupPositions) {
-      let colIndex = 0
-      let xCheck = 0
-      for (let i = 0; i < columns; i++) {
-        if (Math.abs(pos.x - xCheck) < 1) {
-          colIndex = i
-          break
-        }
-        xCheck += columnWidths[i] + columnGap
+      let x = 0
+      for (let i = 0; i < pos.colIndex; i++) {
+        x += columnWidths[i] + columnGap
       }
-
-      let newX = 0
-      for (let i = 0; i < colIndex; i++) {
-        newX += columnWidths[i] + columnGap
-      }
-      pos.x = newX
+      groupFinalPositions.push({
+        groupId: pos.groupId,
+        x,
+        y: pos.y,
+      })
     }
 
     // Step 3: Build ReactFlow nodes
@@ -532,7 +535,7 @@ export async function applyHierarchicalLayout(
     const positions = new Map<string, { x: number; y: number }>()
 
     for (const group of groupLayouts) {
-      const pos = groupPositions.find(p => p.groupId === group.groupId)!
+      const pos = groupFinalPositions.find(p => p.groupId === group.groupId)!
       const memberIds = groupMap.get(group.groupKey) || []
 
       positions.set(group.groupId, { x: pos.x, y: pos.y })
@@ -548,6 +551,7 @@ export async function applyHierarchicalLayout(
           nodeCount: memberIds.length,
           collapsed: group.isCollapsed,
           onToggleCollapse,
+          hideHeader: hideGroupHeader,
         },
         style: {
           width: group.width,

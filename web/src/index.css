@@ -65,10 +65,35 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4);
 
+  /* Topology node styling */
+  --topology-node-border: var(--border-light);
+  --topology-node-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+
   /* Scrollbar */
   --scrollbar-track: #1e293b;
   --scrollbar-thumb: #475569;
   --scrollbar-thumb-hover: #64748b;
+
+  /* Group border colors (visible in dark mode) */
+  --group-border-namespace: rgba(59, 130, 246, 0.4);
+  --group-border-app: rgba(16, 185, 129, 0.4);
+  --group-border-label: rgba(245, 158, 11, 0.4);
+
+  /* Group header backgrounds */
+  --group-header-namespace: rgba(59, 130, 246, 0.2);
+  --group-header-app: rgba(16, 185, 129, 0.2);
+  --group-header-label: rgba(245, 158, 11, 0.2);
+
+  /* Group text colors (light for dark mode) */
+  --group-label-namespace: #93c5fd;
+  --group-label-app: #6ee7b7;
+  --group-label-label: #fcd34d;
+  --group-icon-namespace: #60a5fa;
+  --group-icon-app: #34d399;
+  --group-icon-label: #fbbf24;
+
+  /* Topology background dots */
+  --topology-bg-dots: #334155;
 }
 
 /* Light Theme */
@@ -105,10 +130,35 @@
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 
+  /* Topology node styling */
+  --topology-node-border: rgba(0, 0, 0, 0.05);
+  --topology-node-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
   /* Scrollbar */
   --scrollbar-track: #f1f5f9;
   --scrollbar-thumb: #cbd5e1;
   --scrollbar-thumb-hover: #94a3b8;
+
+  /* Group border colors (visible but not harsh in light mode) */
+  --group-border-namespace: rgba(59, 130, 246, 0.3);
+  --group-border-app: rgba(16, 185, 129, 0.3);
+  --group-border-label: rgba(245, 158, 11, 0.3);
+
+  /* Group header backgrounds (more prominent in light mode) */
+  --group-header-namespace: rgba(59, 130, 246, 0.15);
+  --group-header-app: rgba(16, 185, 129, 0.15);
+  --group-header-label: rgba(245, 158, 11, 0.15);
+
+  /* Group text colors (darker for light mode contrast) */
+  --group-label-namespace: #1d4ed8;
+  --group-label-app: #047857;
+  --group-label-label: #b45309;
+  --group-icon-namespace: #2563eb;
+  --group-icon-app: #059669;
+  --group-icon-label: #d97706;
+
+  /* Topology background dots (barely visible) */
+  --topology-bg-dots: rgba(148, 163, 184, 0.25);
 }
 
 /* ============================================
@@ -175,9 +225,22 @@ body {
   cursor: pointer;
 }
 
-/* Override default group node background - we handle it in GroupNode component */
+/* Topology node card styling - uses theme CSS variables */
+.topology-node-card {
+  border: none;
+  box-shadow: var(--topology-node-shadow);
+}
+
+/* Background dots - uses CSS variable for theme awareness */
+.react-flow__background pattern circle {
+  fill: var(--topology-bg-dots) !important;
+}
+
+/* Override default group node styling - we handle it in GroupNode component */
 .react-flow__node-group {
   background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .react-flow__edge-path {
