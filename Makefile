@@ -11,9 +11,9 @@ build: frontend embed backend
 
 # Build and install to /usr/local/bin
 install: build
-	@echo "Installing to /usr/local/bin/kubectl-explore..."
-	@cp explorer /usr/local/bin/kubectl-explore || sudo cp explorer /usr/local/bin/kubectl-explore
-	@echo "Installed! Run 'kubectl explore' or 'kubectl-explore'"
+	@echo "Installing to /usr/local/bin/kubectl-explorer..."
+	@cp explorer /usr/local/bin/kubectl-explorer || sudo cp explorer /usr/local/bin/kubectl-explorer
+	@echo "Installed! Run 'kubectl explore' or 'kubectl-explorer'"
 
 # Build Go backend with embedded frontend
 backend:

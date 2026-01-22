@@ -13,7 +13,7 @@ before:
 builds:
   - id: explorer
     main: ./cmd/explorer
-    binary: kubectl-explore
+    binary: kubectl-explorer
     env:
       - CGO_ENABLED=0
     goos:
@@ -106,6 +106,7 @@ brews:
     description: "Kubernetes cluster visualization and topology explorer"
     license: "Apache-2.0"
     install: |
-      bin.install "kubectl-explore"
+      bin.install "kubectl-explorer"
+      bin.install_symlink "kubectl-explorer" => "skyhook-explorer"
     test: |
-      system "#{bin}/kubectl-explore", "--version"
+      system "#{bin}/kubectl-explorer", "--version"

@@ -5,7 +5,7 @@
 set -e
 
 REPO="skyhook-io/explorer"
-BINARY_NAME="kubectl-explore"
+BINARY_NAME="kubectl-explorer"
 INSTALL_DIR="/usr/local/bin"
 
 # Detect OS and architecture
@@ -74,6 +74,6 @@ echo "Skyhook Explorer v${VERSION} installed successfully!"
 echo ""
 echo "Usage:"
 echo "  kubectl explore        # as kubectl plugin"
-echo "  kubectl-explore        # standalone"
+echo "  kubectl-explorer        # standalone"
 echo ""
 echo "Run 'kubectl explore --help' for more options."
