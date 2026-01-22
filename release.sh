@@ -50,7 +50,9 @@ increment_version() {
 
 # Get latest tag
 echo "Checking latest release..."
-latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+git fetch --tags --quiet
+latest_tag=$(git tag -l 'v*' --sort=-v:refname | head -n1)
+latest_tag=${latest_tag:-v0.0.0}
 echo "Latest release: $latest_tag"
 echo ""
 
