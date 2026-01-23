@@ -142,9 +142,15 @@ export const GroupNode = memo(function GroupNode({
       />
 
       {/* Container with border - use explicit dimensions from props */}
+      {/* Top position adjusts based on zoom to keep border tight around content */}
       <div
-        className="absolute top-0 left-0 rounded-xl box-border isolate overflow-hidden bg-theme-surface/40"
-        style={{ width: width || '100%', height: height || '100%', ...getBorderStyle() }}
+        className="absolute left-0 rounded-xl box-border isolate overflow-hidden bg-theme-surface/40"
+        style={{
+          width: width || '100%',
+          height: `calc(${height || '100%'}px - ${60 * (1 - headerScale)}px)`,
+          top: `${60 * (1 - headerScale)}px`,
+          ...getBorderStyle()
+        }}
       >
         {/* Header bar - content scales based on zoom level for readability */}
         {/* Hidden when hideHeader is true (single namespace view) */}
