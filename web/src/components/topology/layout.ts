@@ -10,9 +10,9 @@ const elkOptionsGroup = {
   'elk.algorithm': 'layered',
   'elk.direction': 'RIGHT',
   'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-  'elk.spacing.nodeNode': '32',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '55',
-  'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+  'elk.spacing.nodeNode': '40',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '85',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '25',
   'elk.edgeRouting': 'ORTHOGONAL',
   'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
 }
@@ -204,6 +204,7 @@ function pickGroupName(nodes: TopologyNode[]): string {
   // Priority order for picking the group name
   const kindPriority: Record<string, number> = {
     'Deployment': 1,
+    'Rollout': 1,
     'StatefulSet': 2,
     'DaemonSet': 3,
     'CronJob': 4,
@@ -321,9 +322,9 @@ export function buildHierarchicalElkGraph(
             'elk.padding': `[left=${GROUP_PADDING.left}, top=${GROUP_PADDING.top}, right=${GROUP_PADDING.right}, bottom=${GROUP_PADDING.bottom}]`,
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
-            'elk.spacing.nodeNode': '32',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '55',
-            'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+            'elk.spacing.nodeNode': '40',
+            'elk.layered.spacing.nodeNodeBetweenLayers': '85',
+            'elk.layered.spacing.edgeNodeBetweenLayers': '25',
             'elk.nodeSize.minimum': `(${minWidth}, 100)`,
           },
           labels: [{ text: groupKey }],

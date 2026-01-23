@@ -25,12 +25,13 @@ import { healthToSeverity, SEVERITY_DOT } from '../../utils/badge-colors'
 // Node dimensions for ELK layout - sized for typical K8s resource names
 export const NODE_DIMENSIONS: Record<NodeKind, { width: number; height: number }> = {
   Internet: { width: 120, height: 52 },
-  Ingress: { width: 280, height: 56 },
-  Service: { width: 220, height: 56 },
-  Deployment: { width: 240, height: 56 },
-  DaemonSet: { width: 240, height: 56 },
-  StatefulSet: { width: 240, height: 56 },
-  ReplicaSet: { width: 240, height: 56 },
+  Ingress: { width: 300, height: 56 },
+  Service: { width: 260, height: 56 },
+  Deployment: { width: 280, height: 56 },
+  Rollout: { width: 280, height: 56 },
+  DaemonSet: { width: 280, height: 56 },
+  StatefulSet: { width: 280, height: 56 },
+  ReplicaSet: { width: 280, height: 56 },
   Pod: { width: 300, height: 56 },
   PodGroup: { width: 200, height: 64 },
   ConfigMap: { width: 180, height: 48 },
@@ -52,6 +53,7 @@ function getIcon(kind: NodeKind) {
     case 'Service':
       return Server
     case 'Deployment':
+    case 'Rollout':
     case 'DaemonSet':
     case 'StatefulSet':
       return Box
@@ -122,6 +124,7 @@ function getIconColor(kind: NodeKind): string {
     case 'Service':
       return 'text-blue-400'
     case 'Deployment':
+    case 'Rollout':
     case 'DaemonSet':
     case 'StatefulSet':
     case 'ReplicaSet':
@@ -149,6 +152,7 @@ function getIconColor(kind: NodeKind): string {
 function getSubtitle(kind: NodeKind, nodeData: Record<string, unknown>): string {
   switch (kind) {
     case 'Deployment':
+    case 'Rollout':
     case 'DaemonSet':
     case 'StatefulSet':
     case 'ReplicaSet': {
@@ -270,7 +274,7 @@ export const K8sResourceNode = memo(function K8sResourceNode({
           isSmallNode ? 'opacity-90' : ''
         )}
         style={{
-          minWidth: NODE_DIMENSIONS[kind]?.width || 180,
+          width: NODE_DIMENSIONS[kind]?.width || 180,
           border: 'none',
           ...getStatusBorderStyle(status),
           ...getStatusBgStyle(status),
