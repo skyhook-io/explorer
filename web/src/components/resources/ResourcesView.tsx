@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Box,
@@ -186,6 +187,7 @@ interface Column {
   label: string
   width?: string
   hideOnMobile?: boolean
+  tooltip?: string // Explanation of what this column means
 }
 
 // Default columns for unknown resource types (CRDs)
@@ -209,26 +211,26 @@ const KNOWN_COLUMNS: Record<string, Column[]> = {
   deployments: [
     { key: 'name', label: 'Name' },
     { key: 'namespace', label: 'Namespace', width: 'w-48' },
-    { key: 'ready', label: 'Ready', width: 'w-24' },
-    { key: 'upToDate', label: 'Up-to-date', width: 'w-24', hideOnMobile: true },
-    { key: 'available', label: 'Available', width: 'w-24', hideOnMobile: true },
-    { key: 'conditions', label: 'Conditions', width: 'w-44', hideOnMobile: true },
+    { key: 'ready', label: 'Ready', width: 'w-24', tooltip: 'Ready pods / Desired replicas' },
+    { key: 'upToDate', label: 'Up-to-date', width: 'w-24', hideOnMobile: true, tooltip: 'Number of pods running the current pod template' },
+    { key: 'available', label: 'Available', width: 'w-24', hideOnMobile: true, tooltip: 'Number of pods available (ready for minReadySeconds)' },
+    { key: 'conditions', label: 'Conditions', width: 'w-44', hideOnMobile: true, tooltip: 'Deployment conditions (Available, Progressing)' },
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
   daemonsets: [
     { key: 'name', label: 'Name' },
     { key: 'namespace', label: 'Namespace', width: 'w-48' },
-    { key: 'desired', label: 'Desired', width: 'w-20' },
-    { key: 'ready', label: 'Ready', width: 'w-20' },
-    { key: 'upToDate', label: 'Up-to-date', width: 'w-24', hideOnMobile: true },
-    { key: 'available', label: 'Available', width: 'w-24', hideOnMobile: true },
+    { key: 'desired', label: 'Desired', width: 'w-20', tooltip: 'Number of nodes that should run the daemon pod (based on node selector)' },
+    { key: 'ready', label: 'Ready', width: 'w-20', tooltip: 'Number of pods that are ready (passing readiness probes)' },
+    { key: 'upToDate', label: 'Up-to-date', width: 'w-24', hideOnMobile: true, tooltip: 'Number of pods running the current pod template spec' },
+    { key: 'available', label: 'Available', width: 'w-24', hideOnMobile: true, tooltip: 'Number of pods available (ready for minReadySeconds duration)' },
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
   statefulsets: [
     { key: 'name', label: 'Name' },
     { key: 'namespace', label: 'Namespace', width: 'w-48' },
-    { key: 'ready', label: 'Ready', width: 'w-24' },
-    { key: 'upToDate', label: 'Up-to-date', width: 'w-24', hideOnMobile: true },
+    { key: 'ready', label: 'Ready', width: 'w-24', tooltip: 'Ready pods / Desired replicas' },
+    { key: 'upToDate', label: 'Up-to-date', width: 'w-24', hideOnMobile: true, tooltip: 'Number of pods running the current pod template' },
     { key: 'images', label: 'Images', width: 'w-48', hideOnMobile: true },
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
@@ -251,14 +253,14 @@ const KNOWN_COLUMNS: Record<string, Column[]> = {
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
   ingresses: [
-    { key: 'name', label: 'Name' },
-    { key: 'namespace', label: 'Namespace', width: 'w-48' },
-    { key: 'class', label: 'Class', width: 'w-24' },
-    { key: 'hosts', label: 'Hosts', width: 'w-40' },
-    { key: 'rules', label: 'Rules', width: 'w-56', hideOnMobile: true },
-    { key: 'tls', label: 'TLS', width: 'w-16' },
-    { key: 'address', label: 'Address', width: 'w-32', hideOnMobile: true },
-    { key: 'age', label: 'Age', width: 'w-20' },
+    { key: 'name', label: 'Name', width: 'min-w-40' },
+    { key: 'namespace', label: 'Namespace', width: 'w-36 shrink-0' },
+    { key: 'class', label: 'Class', width: 'w-24 shrink-0' },
+    { key: 'hosts', label: 'Hosts', width: 'min-w-48' },
+    { key: 'rules', label: 'Rules', width: 'min-w-56', hideOnMobile: true },
+    { key: 'tls', label: 'TLS', width: 'w-14 shrink-0' },
+    { key: 'address', label: 'Address', width: 'min-w-32', hideOnMobile: true },
+    { key: 'age', label: 'Age', width: 'w-16 shrink-0' },
   ],
   nodes: [
     { key: 'name', label: 'Name' },
@@ -356,6 +358,10 @@ function getInitialFiltersFromURL() {
     search: params.get('search') || '',
     statusFilter: params.get('status') || '',
     problemFilters: params.get('problems')?.split(',').filter(Boolean) || [],
+    showInactive: params.get('showInactive') === 'true',
+    labelSelector: params.get('labels') || '', // e.g., "app=caretta,version=v1"
+    ownerKind: params.get('ownerKind') || '', // e.g., "DaemonSet"
+    ownerName: params.get('ownerName') || '', // e.g., "app-caretta"
   }
 }
 
@@ -363,6 +369,7 @@ function getInitialFiltersFromURL() {
 type SortDirection = 'asc' | 'desc' | null
 
 export function ResourcesView({ namespace, selectedResource, onResourceClick, onKindChange }: ResourcesViewProps) {
+  const location = useLocation()
   const initialFilters = getInitialFiltersFromURL()
   const [selectedKind, setSelectedKind] = useState<SelectedKindInfo>(getInitialKindFromURL)
   const [searchTerm, setSearchTerm] = useState(initialFilters.search)
@@ -375,6 +382,43 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
   const [statusFilter, setStatusFilter] = useState<string>(initialFilters.statusFilter)
   const [problemFilters, setProblemFilters] = useState<string[]>(initialFilters.problemFilters)
   const [showFilterDropdown, setShowFilterDropdown] = useState(false)
+  // ReplicaSet-specific: hide inactive by default
+  const [showInactiveReplicaSets, setShowInactiveReplicaSets] = useState(initialFilters.showInactive)
+  // Label/owner filtering for deep-linking from workload details
+  const [labelSelector, setLabelSelector] = useState<string>(initialFilters.labelSelector)
+  const [ownerKind, setOwnerKind] = useState<string>(initialFilters.ownerKind)
+  const [ownerName, setOwnerName] = useState<string>(initialFilters.ownerName)
+
+  // Track if this is the initial mount to avoid re-syncing on first render
+  const isInitialMount = useRef(true)
+
+  // Sync state from URL when navigation occurs (e.g., deep linking from WorkloadRenderer)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+
+    // Re-read URL params and update state
+    const newKind = getInitialKindFromURL()
+    const newFilters = getInitialFiltersFromURL()
+
+    // Update kind if it changed
+    if (newKind.name !== selectedKind.name || newKind.group !== selectedKind.group) {
+      setSelectedKind(newKind)
+    }
+
+    // Update owner filter if it changed
+    if (newFilters.ownerKind !== ownerKind || newFilters.ownerName !== ownerName) {
+      setOwnerKind(newFilters.ownerKind)
+      setOwnerName(newFilters.ownerName)
+    }
+
+    // Update search if it changed
+    if (newFilters.search !== searchTerm) {
+      setSearchTerm(newFilters.search)
+    }
+  }, [location.search]) // Re-run when URL search params change
 
   // Update URL with all state
   const updateURL = useCallback((
@@ -382,6 +426,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     search: string,
     status: string,
     problems: string[],
+    showInactive: boolean,
     resourceNs?: string,
     resourceName?: string
   ) => {
@@ -410,6 +455,11 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     } else {
       params.delete('problems')
     }
+    if (showInactive) {
+      params.set('showInactive', 'true')
+    } else {
+      params.delete('showInactive')
+    }
     if (resourceNs && resourceName) {
       params.set('resource', `${resourceNs}/${resourceName}`)
     } else {
@@ -429,8 +479,8 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
         return // Wait for kind sync effect to run first
       }
     }
-    updateURL(selectedKind, searchTerm, statusFilter, problemFilters, selectedResource?.namespace, selectedResource?.name)
-  }, [selectedKind, searchTerm, statusFilter, problemFilters, selectedResource, updateURL])
+    updateURL(selectedKind, searchTerm, statusFilter, problemFilters, showInactiveReplicaSets, selectedResource?.namespace, selectedResource?.name)
+  }, [selectedKind, searchTerm, statusFilter, problemFilters, showInactiveReplicaSets, selectedResource, updateURL])
 
   // Handle resource click from URL on mount
   useEffect(() => {
@@ -489,7 +539,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
       if (!res.ok) throw new Error('Failed to fetch resources')
       return res.json()
     },
-    refetchInterval: 10000,
+    refetchInterval: 30000, // SSE handles real-time updates; this is a fallback
   })
 
   // Track last updated time
@@ -526,8 +576,11 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
   }, [sortColumn, sortDirection])
 
   // Get sortable value from a resource for a given column
-  const getSortValue = useCallback((resource: any, column: string): string | number => {
+  const getSortValue = useCallback((resource: any, column: string, kind?: string): string | number => {
     const meta = resource.metadata || {}
+    const status = resource.status || {}
+    const kindLower = kind?.toLowerCase() || ''
+
     switch (column) {
       case 'name':
         return meta.name || ''
@@ -536,24 +589,39 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
       case 'age':
         return meta.creationTimestamp ? new Date(meta.creationTimestamp).getTime() : 0
       case 'status':
-        return resource.status?.phase || ''
+        return status.phase || ''
       case 'ready':
         // For pods, use ready/total ratio
-        if (resource.status?.containerStatuses) {
-          const ready = resource.status.containerStatuses.filter((c: any) => c.ready).length
-          const total = resource.status.containerStatuses.length
+        if (status.containerStatuses) {
+          const ready = status.containerStatuses.filter((c: any) => c.ready).length
+          const total = status.containerStatuses.length
           return total > 0 ? ready / total : 0
         }
-        // For workloads, use readyReplicas/replicas ratio
-        const desired = resource.spec?.replicas ?? 0
-        const readyReplicas = resource.status?.readyReplicas ?? 0
-        return desired > 0 ? readyReplicas / desired : 0
+        // For DaemonSets, use numberReady/desiredNumberScheduled
+        if (kindLower === 'daemonsets') {
+          const desired = status.desiredNumberScheduled ?? 0
+          const ready = status.numberReady ?? 0
+          return desired > 0 ? ready / desired : 0
+        }
+        // For other workloads, use readyReplicas/replicas ratio
+        const desiredReplicas = resource.spec?.replicas ?? 0
+        const readyReplicas = status.readyReplicas ?? 0
+        return desiredReplicas > 0 ? readyReplicas / desiredReplicas : 0
+      case 'desired':
+        // DaemonSet: desiredNumberScheduled
+        return status.desiredNumberScheduled ?? 0
+      case 'available':
+        // DaemonSet: numberAvailable, others: availableReplicas
+        return status.numberAvailable ?? status.availableReplicas ?? 0
+      case 'upToDate':
+        // DaemonSet: updatedNumberScheduled, others: updatedReplicas
+        return status.updatedNumberScheduled ?? status.updatedReplicas ?? 0
       case 'restarts':
         return getPodRestarts(resource)
       case 'type':
         return resource.spec?.type || ''
       case 'version':
-        return resource.status?.nodeInfo?.kubeletVersion || ''
+        return status.nodeInfo?.kubeletVersion || ''
       default:
         return ''
     }
@@ -640,11 +708,39 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
       result = result.filter((r: any) => podMatchesProblemFilter(r, problemFilters))
     }
 
+    // Apply inactive ReplicaSet filter (default: hide inactive)
+    if (selectedKind.name.toLowerCase() === 'replicasets' && !showInactiveReplicaSets) {
+      result = result.filter((r: any) => isReplicaSetActive(r))
+    }
+
+    // Apply label selector filter (e.g., "app=caretta,version=v1")
+    if (labelSelector) {
+      const labelPairs = labelSelector.split(',').map(pair => {
+        const [key, value] = pair.split('=')
+        return { key: key?.trim(), value: value?.trim() }
+      }).filter(p => p.key && p.value)
+
+      result = result.filter((r: any) => {
+        const labels = r.metadata?.labels || {}
+        return labelPairs.every(({ key, value }) => labels[key] === value)
+      })
+    }
+
+    // Apply owner filter (e.g., ownerKind=DaemonSet, ownerName=app-caretta)
+    if (ownerKind && ownerName) {
+      result = result.filter((r: any) => {
+        const ownerRefs = r.metadata?.ownerReferences || []
+        return ownerRefs.some((ref: any) =>
+          ref.kind === ownerKind && ref.name === ownerName
+        )
+      })
+    }
+
     // Apply custom sorting if set
     if (sortColumn && sortDirection) {
       result = [...result].sort((a: any, b: any) => {
-        const aVal = getSortValue(a, sortColumn)
-        const bVal = getSortValue(b, sortColumn)
+        const aVal = getSortValue(a, sortColumn, selectedKind.name)
+        const bVal = getSortValue(b, sortColumn, selectedKind.name)
         let comparison = 0
         if (typeof aVal === 'number' && typeof bVal === 'number') {
           comparison = aVal - bVal
@@ -654,8 +750,11 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
         return sortDirection === 'desc' ? -comparison : comparison
       })
     } else {
-      // Default sort: completed pods at bottom for pods, otherwise by name
-      if (selectedKind.name === 'pods') {
+      // Default sort by kind
+      const kindLower = selectedKind.name.toLowerCase()
+
+      if (kindLower === 'pods') {
+        // Completed pods at bottom
         result = [...result].sort((a: any, b: any) => {
           const aCompleted = a.status?.phase === 'Succeeded'
           const bCompleted = b.status?.phase === 'Succeeded'
@@ -663,11 +762,53 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
           if (!aCompleted && bCompleted) return -1
           return 0
         })
+      } else if (kindLower === 'daemonsets') {
+        // DaemonSets with 0 desired (empty/inactive) at bottom, then sort by ready desc
+        result = [...result].sort((a: any, b: any) => {
+          const aDesired = a.status?.desiredNumberScheduled ?? 0
+          const bDesired = b.status?.desiredNumberScheduled ?? 0
+          const aReady = a.status?.numberReady ?? 0
+          const bReady = b.status?.numberReady ?? 0
+
+          // Empty DaemonSets (0 desired) go to bottom
+          if (aDesired === 0 && bDesired > 0) return 1
+          if (aDesired > 0 && bDesired === 0) return -1
+
+          // Then sort by health: unhealthy (ready < desired) first
+          const aHealthy = aReady >= aDesired
+          const bHealthy = bReady >= bDesired
+          if (!aHealthy && bHealthy) return -1
+          if (aHealthy && !bHealthy) return 1
+
+          // Finally sort by name
+          return (a.metadata?.name || '').localeCompare(b.metadata?.name || '')
+        })
+      } else if (['deployments', 'statefulsets', 'replicasets'].includes(kindLower)) {
+        // Workloads: unhealthy first, scaled-to-zero at bottom
+        result = [...result].sort((a: any, b: any) => {
+          const aDesired = a.spec?.replicas ?? 0
+          const bDesired = b.spec?.replicas ?? 0
+          const aReady = a.status?.readyReplicas ?? 0
+          const bReady = b.status?.readyReplicas ?? 0
+
+          // Scaled-to-zero at bottom
+          if (aDesired === 0 && bDesired > 0) return 1
+          if (aDesired > 0 && bDesired === 0) return -1
+
+          // Unhealthy (ready < desired) first
+          const aHealthy = aReady >= aDesired
+          const bHealthy = bReady >= bDesired
+          if (!aHealthy && bHealthy) return -1
+          if (aHealthy && !bHealthy) return 1
+
+          // Finally sort by name
+          return (a.metadata?.name || '').localeCompare(b.metadata?.name || '')
+        })
       }
     }
 
     return result
-  }, [resources, searchTerm, statusFilter, problemFilters, selectedKind.name, sortColumn, sortDirection, getSortValue, podMatchesProblemFilter, getWorkloadHealthLevel])
+  }, [resources, searchTerm, statusFilter, problemFilters, showInactiveReplicaSets, labelSelector, ownerKind, ownerName, selectedKind.name, sortColumn, sortDirection, getSortValue, podMatchesProblemFilter, getWorkloadHealthLevel])
 
   // Get count for each resource type - now uses dynamic resources
   // Deduplicate to avoid redundant fetches (e.g., multiple API versions of same resource)
@@ -849,13 +990,29 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     return null
   }, [resources, selectedKind.name, getWorkloadHealthLevel])
 
+  // Compute inactive ReplicaSet count for toggle display
+  const inactiveReplicaSetCount = useMemo(() => {
+    if (selectedKind.name.toLowerCase() !== 'replicasets' || !resources) return 0
+    return resources.filter((r: any) => !isReplicaSetActive(r)).length
+  }, [resources, selectedKind.name])
+
   // Check if any filters are active
-  const hasActiveFilters = statusFilter !== '' || problemFilters.length > 0
+  const hasActiveFilters = statusFilter !== '' || problemFilters.length > 0 || labelSelector !== '' || (ownerKind !== '' && ownerName !== '')
+  const hasOwnerFilter = ownerKind !== '' && ownerName !== ''
 
   // Clear all filters
   const clearFilters = useCallback(() => {
     setStatusFilter('')
     setProblemFilters([])
+    setLabelSelector('')
+    setOwnerKind('')
+    setOwnerName('')
+    // Also clear URL params
+    const params = new URLSearchParams(window.location.search)
+    params.delete('labels')
+    params.delete('ownerKind')
+    params.delete('ownerName')
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
     setShowFilterDropdown(false)
   }, [])
 
@@ -940,7 +1097,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                   className={clsx(
                     'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                     isSelected
-                      ? 'bg-blue-500/20 text-blue-300'
+                      ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
                       : 'text-theme-text-secondary hover:bg-theme-elevated hover:text-theme-text-primary'
                   )}
                 >
@@ -948,7 +1105,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                   <span className="flex-1 text-left">{type.label}</span>
                   <span className={clsx(
                     'text-xs px-2 py-0.5 rounded',
-                    isSelected ? 'bg-blue-500/30' : 'bg-theme-elevated'
+                    isSelected ? 'bg-blue-500/30 text-blue-700 dark:text-blue-300' : 'bg-theme-elevated'
                   )}>
                     {count}
                   </span>
@@ -1005,14 +1162,14 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                 className={clsx(
                   'flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors',
                   hasActiveFilters
-                    ? 'bg-blue-500/20 text-blue-300 hover:bg-blue-500/30'
+                    ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300 hover:bg-blue-500/30'
                     : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated'
                 )}
               >
                 <Filter className="w-4 h-4" />
                 <span>Filter</span>
                 {hasActiveFilters && (
-                  <span className="px-1.5 py-0.5 text-xs bg-blue-500/30 rounded">
+                  <span className="px-1.5 py-0.5 text-xs bg-blue-500/30 text-blue-700 dark:text-blue-300 rounded">
                     {(statusFilter ? 1 : 0) + problemFilters.length}
                   </span>
                 )}
@@ -1047,7 +1204,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                               className={clsx(
                                 'px-2 py-1 text-xs rounded transition-colors',
                                 statusFilter === value
-                                  ? 'bg-blue-500/30 text-blue-300'
+                                  ? 'bg-blue-500/30 text-blue-700 dark:text-blue-300'
                                   : 'bg-theme-elevated text-theme-text-secondary hover:text-theme-text-primary'
                               )}
                             >
@@ -1097,10 +1254,10 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                               className={clsx(
                                 'px-2 py-1 text-xs rounded transition-colors',
                                 statusFilter === value
-                                  ? value === 'Healthy' ? 'bg-green-500/30 text-green-300'
-                                    : value === 'Degraded' ? 'bg-yellow-500/30 text-yellow-300'
-                                    : value === 'Unhealthy' ? 'bg-red-500/30 text-red-300'
-                                    : 'bg-blue-500/30 text-blue-300'
+                                  ? value === 'Healthy' ? 'bg-green-500/30 text-green-700 dark:text-green-300'
+                                    : value === 'Degraded' ? 'bg-yellow-500/30 text-yellow-700 dark:text-yellow-300'
+                                    : value === 'Unhealthy' ? 'bg-red-500/30 text-red-700 dark:text-red-300'
+                                    : 'bg-blue-500/30 text-blue-700 dark:text-blue-300'
                                   : 'bg-theme-elevated text-theme-text-secondary hover:text-theme-text-primary'
                               )}
                             >
@@ -1125,7 +1282,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                               className={clsx(
                                 'px-2 py-1 text-xs rounded transition-colors',
                                 statusFilter === value
-                                  ? 'bg-red-500/30 text-red-300'
+                                  ? 'bg-red-500/30 text-red-700 dark:text-red-300'
                                   : 'bg-theme-elevated text-theme-text-secondary hover:text-theme-text-primary'
                               )}
                             >
@@ -1141,11 +1298,24 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
             </div>
           )}
 
+          {/* ReplicaSet inactive toggle */}
+          {selectedKind.name.toLowerCase() === 'replicasets' && inactiveReplicaSetCount > 0 && (
+            <label className="flex items-center gap-1.5 text-xs text-theme-text-tertiary cursor-pointer hover:text-theme-text-secondary">
+              <input
+                type="checkbox"
+                checked={showInactiveReplicaSets}
+                onChange={(e) => setShowInactiveReplicaSets(e.target.checked)}
+                className="w-3 h-3 rounded border-theme-border-light accent-blue-500"
+              />
+              Show inactive ({inactiveReplicaSetCount})
+            </label>
+          )}
+
           {/* Active filter badges */}
           {hasActiveFilters && (
             <div className="flex items-center gap-2">
               {statusFilter && (
-                <span className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500/20 text-blue-300 rounded">
+                <span className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500/20 text-blue-700 dark:text-blue-300 rounded">
                   {statusFilter}
                   <button onClick={() => setStatusFilter('')} className="hover:text-theme-text-primary">
                     <X className="w-3 h-3" />
@@ -1153,13 +1323,31 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                 </span>
               )}
               {problemFilters.map(p => (
-                <span key={p} className="flex items-center gap-1 px-2 py-1 text-xs bg-red-500/20 text-red-300 rounded">
+                <span key={p} className="flex items-center gap-1 px-2 py-1 text-xs bg-red-500/20 text-red-700 dark:text-red-300 rounded">
                   {p}
                   <button onClick={() => toggleProblemFilter(p)} className="hover:text-theme-text-primary">
                     <X className="w-3 h-3" />
                   </button>
                 </span>
               ))}
+              {hasOwnerFilter && (
+                <span className="flex items-center gap-1 px-2 py-1 text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded">
+                  {ownerKind}: {ownerName}
+                  <button
+                    onClick={() => {
+                      setOwnerKind('')
+                      setOwnerName('')
+                      const params = new URLSearchParams(window.location.search)
+                      params.delete('ownerKind')
+                      params.delete('ownerName')
+                      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`)
+                    }}
+                    className="hover:text-theme-text-primary"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
             </div>
           )}
 
@@ -1185,15 +1373,20 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
               Loading...
             </div>
           ) : filteredResources.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-theme-text-tertiary">
-              No {selectedKind.kind} found
+            <div className="flex flex-col items-center justify-center h-full text-theme-text-tertiary">
+              <p>No {selectedKind.kind} found</p>
+              {searchTerm && <p className="text-sm mt-1">No results for "{searchTerm}"</p>}
+              {namespace && <p className="text-sm mt-1 text-theme-text-disabled">Searching in namespace: {namespace}</p>}
             </div>
           ) : (
-            <table className="w-full table-fixed">
+            <table className={clsx(
+              'w-full',
+              selectedKind.name.toLowerCase() !== 'ingresses' && 'table-fixed'
+            )}>
               <thead className="bg-theme-surface sticky top-0 z-10">
                 <tr>
                   {columns.map((col) => {
-                    const isSortable = ['name', 'namespace', 'age', 'status', 'ready', 'restarts', 'type', 'version'].includes(col.key)
+                    const isSortable = ['name', 'namespace', 'age', 'status', 'ready', 'restarts', 'type', 'version', 'desired', 'available', 'upToDate'].includes(col.key)
                     const isSorted = sortColumn === col.key
                     return (
                       <th
@@ -1207,7 +1400,13 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                         onClick={isSortable ? () => handleSort(col.key) : undefined}
                       >
                         <div className="flex items-center gap-1">
-                          <span>{col.label}</span>
+                          {col.tooltip ? (
+                            <Tooltip content={col.tooltip}>
+                              <span className="border-b border-dotted border-theme-text-tertiary">{col.label}</span>
+                            </Tooltip>
+                          ) : (
+                            <span>{col.label}</span>
+                          )}
                           {isSortable && (
                             <span className="text-theme-text-tertiary">
                               {isSorted ? (
@@ -1268,7 +1467,7 @@ function ResourceTypeButton({ resource, count, isSelected, onClick }: ResourceTy
       className={clsx(
         'w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-colors',
         isSelected
-          ? 'bg-blue-500/20 text-blue-300'
+          ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
           : 'text-theme-text-secondary hover:bg-theme-elevated hover:text-theme-text-primary'
       )}
     >
@@ -1280,7 +1479,7 @@ function ResourceTypeButton({ resource, count, isSelected, onClick }: ResourceTy
       </Tooltip>
       <span className={clsx(
         'text-xs px-1.5 py-0.5 rounded min-w-[1.5rem] text-center',
-        isSelected ? 'bg-blue-500/30' : 'bg-theme-elevated'
+        isSelected ? 'bg-blue-500/30 text-blue-700 dark:text-blue-300' : 'bg-theme-elevated'
       )}>
         {count}
       </span>
