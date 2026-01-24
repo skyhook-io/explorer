@@ -79,7 +79,7 @@ export function PropertyList({ children }: { children: React.ReactNode }) {
 }
 
 interface PropertyProps {
-  label: string
+  label: React.ReactNode
   value: unknown
   copyable?: boolean
   onCopy?: (text: string, key: string) => void
@@ -89,6 +89,7 @@ interface PropertyProps {
 export function Property({ label, value, copyable, onCopy, copied }: PropertyProps) {
   if (value === undefined || value === null || value === '') return null
   const strValue = String(value)
+  const labelKey = typeof label === 'string' ? label : 'value'
 
   return (
     <div className="flex items-start gap-2 text-sm">
@@ -96,7 +97,7 @@ export function Property({ label, value, copyable, onCopy, copied }: PropertyPro
       <span className="text-theme-text-primary break-all flex-1">{strValue}</span>
       {copyable && onCopy && (
         <button
-          onClick={() => onCopy(strValue, label)}
+          onClick={() => onCopy(strValue, labelKey)}
           className="p-0.5 text-theme-text-tertiary hover:text-theme-text-primary shrink-0"
         >
           {copied === label ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
@@ -116,8 +117,8 @@ export function ConditionsSection({ conditions }: { conditions?: any[] }) {
   return (
     <Section title={`Conditions (${conditions.length})`} defaultExpanded={conditions.length <= 4}>
       <div className="space-y-2">
-        {conditions.map((cond: any, i: number) => (
-          <div key={i} className="flex items-start gap-2 text-sm">
+        {conditions.map((cond: any) => (
+          <div key={cond.type} className="flex items-start gap-2 text-sm">
             <span className={clsx(
               'w-4 h-4 rounded-full flex items-center justify-center text-xs shrink-0 mt-0.5',
               cond.status === 'True' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
@@ -188,8 +189,8 @@ export function PodTemplateSection({ template }: { template: any }) {
 
   return (
     <div className="space-y-2">
-      {containers.map((c: any, i: number) => (
-        <div key={i} className="bg-theme-elevated/30 rounded p-2 text-sm">
+      {containers.map((c: any) => (
+        <div key={c.name} className="bg-theme-elevated/30 rounded p-2 text-sm">
           <div className="font-medium text-theme-text-primary">{c.name}</div>
           <div className="text-xs text-theme-text-secondary truncate" title={c.image}>{c.image}</div>
           {c.ports && (
@@ -258,6 +259,7 @@ export type CopyHandler = (text: string, key: string) => void
 // ============================================================================
 
 import type { TimelineEvent, Relationships, ResourceRef } from '../../types'
+import { isChangeEvent, isK8sEvent } from '../../types'
 import { Link } from 'lucide-react'
 
 interface RelatedResourcesSectionProps {
@@ -434,19 +436,19 @@ export function EventsSection({ events, isLoading }: EventsSectionProps) {
       <div className="space-y-2 max-h-64 overflow-y-auto">
         {events.map((event, i) => (
           <div
-            key={event.id || i}
+            key={`${event.id}-${i}`}
             className={clsx(
               'p-2 rounded text-sm border-l-2',
-              event.eventType === 'Warning' || event.type === 'change' && event.operation === 'delete'
+              event.eventType === 'Warning' || (isChangeEvent(event) && event.eventType === 'delete')
                 ? 'bg-red-500/10 border-red-500'
-                : event.type === 'k8s_event'
+                : isK8sEvent(event)
                 ? 'bg-blue-500/10 border-blue-500'
                 : 'bg-theme-elevated/30 border-theme-border'
             )}
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-theme-text-primary">
-                {event.type === 'k8s_event' ? event.reason : event.operation}
+                {isK8sEvent(event) ? event.reason : event.eventType}
               </span>
               <span className="text-xs text-theme-text-tertiary">
                 {formatEventTime(event.timestamp)}
@@ -457,7 +459,7 @@ export function EventsSection({ events, isLoading }: EventsSectionProps) {
                 {event.message}
               </div>
             )}
-            {event.type === 'change' && event.diff?.summary && (
+            {isChangeEvent(event) && event.diff?.summary && (
               <div className="text-xs text-theme-text-secondary mt-1">
                 {event.diff.summary}
               </div>

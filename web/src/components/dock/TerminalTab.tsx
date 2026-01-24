@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { RefreshCw, ChevronDown } from 'lucide-react'
 import { clsx } from 'clsx'
+import { Tooltip } from '../ui/Tooltip'
 
 interface TerminalTabProps {
   namespace: string
@@ -232,12 +233,17 @@ export function TerminalTab({
     <div className="relative h-full w-full bg-slate-900 overflow-hidden">
       {/* Mini toolbar */}
       <div className="h-8 flex items-center gap-2 px-2 bg-slate-800/50 border-b border-slate-700/50">
-        <span
-          className={clsx(
-            'w-2 h-2 rounded-full',
-            isConnected ? 'bg-green-500' : isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
-          )}
-        />
+        <Tooltip
+          content={isConnected ? 'Connected to pod' : isConnecting ? 'Connecting...' : 'Disconnected - click Reconnect'}
+          position="bottom"
+        >
+          <span
+            className={clsx(
+              'w-2 h-2 rounded-full cursor-help',
+              isConnected ? 'bg-green-500' : isConnecting ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+            )}
+          />
+        </Tooltip>
         <span className="text-xs text-slate-400">
           {podName}
         </span>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { usePodLogs, createLogStream, type LogStreamEvent } from '../../api/client'
 import { Play, Pause, Download, Search, X, ChevronDown, Terminal, RotateCcw } from 'lucide-react'
+import { Tooltip } from '../ui/Tooltip'
 
 interface LogLine {
   timestamp: string
@@ -188,27 +189,31 @@ export function LogsViewer({ namespace, podName, containers, initialContainer }:
         </button>
 
         {/* Previous logs toggle */}
-        <label className="flex items-center gap-1.5 text-xs text-theme-text-secondary cursor-pointer">
-          <input
-            type="checkbox"
-            checked={showPrevious}
-            onChange={(e) => setShowPrevious(e.target.checked)}
-            className="w-3 h-3 rounded border-theme-border-light bg-theme-elevated text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
-          />
-          <span>Previous</span>
-        </label>
+        <Tooltip content="Show logs from the pod's previous instance (if it was restarted). Useful for troubleshooting crashed containers." position="bottom">
+          <label className="flex items-center gap-1.5 text-xs text-theme-text-secondary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showPrevious}
+              onChange={(e) => setShowPrevious(e.target.checked)}
+              className="w-3 h-3 rounded border-theme-border-light bg-theme-elevated text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            />
+            <span className="border-b border-dotted border-theme-text-tertiary">Previous</span>
+          </label>
+        </Tooltip>
 
         {/* Tail lines selector */}
-        <select
-          value={tailLines}
-          onChange={(e) => setTailLines(Number(e.target.value))}
-          className="appearance-none bg-theme-elevated text-theme-text-primary text-xs rounded px-2 py-1.5 pr-5 border border-theme-border-light focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value={100}>100 lines</option>
-          <option value={500}>500 lines</option>
-          <option value={1000}>1000 lines</option>
-          <option value={5000}>5000 lines</option>
-        </select>
+        <Tooltip content="Number of historical log lines to load. Larger values may be slower to fetch." position="bottom">
+          <select
+            value={tailLines}
+            onChange={(e) => setTailLines(Number(e.target.value))}
+            className="appearance-none bg-theme-elevated text-theme-text-primary text-xs rounded px-2 py-1.5 pr-5 border border-theme-border-light focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <option value={100}>100 lines</option>
+            <option value={500}>500 lines</option>
+            <option value={1000}>1000 lines</option>
+            <option value={5000}>5000 lines</option>
+          </select>
+        </Tooltip>
 
         <div className="flex-1" />
 
