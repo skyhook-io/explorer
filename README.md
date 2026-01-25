@@ -109,8 +109,8 @@ skyhook-explorer --kubeconfig /path/to/kubeconfig
 # Don't auto-open browser
 skyhook-explorer --no-browser
 
-# Enable change history persistence
-skyhook-explorer --persist-history --history-limit 5000
+# Use SQLite for persistent timeline storage
+skyhook-explorer --timeline-storage sqlite
 ```
 
 ### CLI Flags
@@ -122,8 +122,9 @@ skyhook-explorer --persist-history --history-limit 5000
 | `--port` | `9280` | Server port |
 | `--no-browser` | `false` | Don't auto-open browser |
 | `--dev` | `false` | Development mode (serve frontend from filesystem) |
-| `--persist-history` | `false` | Persist change history to `~/.skyhook-explorer/history.jsonl` |
-| `--history-limit` | `1000` | Maximum changes to retain in history |
+| `--timeline-storage` | `memory` | Timeline storage backend: `memory` or `sqlite` |
+| `--timeline-db` | `~/.skyhook-explorer/timeline.db` | Path to SQLite database (when using sqlite storage) |
+| `--history-limit` | `10000` | Maximum events to retain in timeline |
 | `--version` | | Show version and exit |
 
 ---

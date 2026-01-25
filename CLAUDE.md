@@ -142,8 +142,9 @@ make docker         # Build Docker image
 --no-browser        Don't auto-open browser
 --dev               Development mode (serve frontend from web/dist instead of embedded)
 --version           Show version and exit
---persist-history   Persist change history to file
---history-limit     Maximum number of changes to retain in history (default: 1000)
+--timeline-storage  Timeline storage backend: memory or sqlite (default: memory)
+--timeline-db       Path to timeline SQLite database (default: ~/.skyhook-explorer/timeline.db)
+--history-limit     Maximum number of events to retain in timeline (default: 10000)
 ```
 
 ## API Endpoints
@@ -242,11 +243,11 @@ DELETE /api/helm/releases/{ns}/{name}              # Uninstall release
   - `resources`: Full hierarchy (Deployment → ReplicaSet → Pod)
 - Node types: Ingress, Service, Deployment, DaemonSet, StatefulSet, ReplicaSet, Pod, Job, CronJob, ConfigMap, Secret, HPA, PVC
 
-### Change History
-- Ring buffer for in-memory change tracking
-- Optional file persistence in JSONL format (`--persist-history`)
+### Timeline
+- In-memory or SQLite storage for event tracking (`--timeline-storage`)
 - Records: resource kind, name, namespace, change type, timestamp, owner info, health state
-- Configurable limit (default: 1000 changes)
+- Configurable limit (default: 10000 events)
+- Supports grouping by owner, app label, or namespace
 
 ### Resource Relationships
 - Computed at query time for resource detail views
