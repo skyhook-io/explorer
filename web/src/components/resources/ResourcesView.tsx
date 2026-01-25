@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef, forwardRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useQuery, useQueries } from '@tanstack/react-query'
+import { useQueries } from '@tanstack/react-query'
 import {
   Box,
   Search,
@@ -392,6 +392,9 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
   // Track if this is the initial mount to avoid re-syncing on first render
   const isInitialMount = useRef(true)
 
+  // Ref to selected row for scrolling into view on deeplink
+  const selectedRowRef = useRef<HTMLTableRowElement>(null)
+
   // Sync state from URL when navigation occurs (e.g., deep linking from WorkloadRenderer)
   useEffect(() => {
     if (isInitialMount.current) {
@@ -528,19 +531,51 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     return categorizeResources(apiResources)
   }, [apiResources])
 
-  // Fetch resources for selected kind
-  const { data: resources, isLoading, refetch, dataUpdatedAt } = useQuery({
-    queryKey: ['resources', selectedKind.name, selectedKind.group, namespace],
-    queryFn: async () => {
-      const params = new URLSearchParams()
-      if (namespace) params.set('namespace', namespace)
-      if (selectedKind.group) params.set('group', selectedKind.group)
-      const res = await fetch(`/api/resources/${selectedKind.name}?${params}`)
-      if (!res.ok) throw new Error('Failed to fetch resources')
-      return res.json()
-    },
-    refetchInterval: 30000, // SSE handles real-time updates; this is a fallback
+  // Get resources to count - use kind as unique key since name can conflict (e.g., pods vs PodMetrics)
+  const resourcesToCount = useMemo(() => {
+    if (categories) {
+      return categories.flatMap(c => c.resources).map(r => ({
+        kind: r.kind,
+        name: r.name,
+        group: r.group,
+      }))
+    }
+    return CORE_RESOURCE_TYPES.map(t => ({
+      kind: t.label,
+      name: t.kind,
+      group: '',
+    }))
+  }, [categories])
+
+  // Fetch ALL resources using useQueries - single source of truth for both counts and display
+  const resourceQueries = useQueries({
+    queries: resourcesToCount.map((resource) => ({
+      queryKey: ['resources', resource.name, resource.group, namespace],
+      queryFn: async () => {
+        const params = new URLSearchParams()
+        if (namespace) params.set('namespace', namespace)
+        if (resource.group) params.set('group', resource.group)
+        const res = await fetch(`/api/resources/${resource.name}?${params}`)
+        if (!res.ok) return []
+        return res.json()
+      },
+      staleTime: 30000,
+      refetchInterval: 30000,
+    })),
   })
+
+  // Find the selected kind's query and derive resources/isLoading/refetch from it
+  const selectedQueryIndex = useMemo(() => {
+    return resourcesToCount.findIndex(r =>
+      r.name === selectedKind.name && r.group === selectedKind.group
+    )
+  }, [resourcesToCount, selectedKind.name, selectedKind.group])
+
+  const selectedQuery = resourceQueries[selectedQueryIndex]
+  const resources = selectedQuery?.data
+  const isLoading = selectedQuery?.isLoading ?? true
+  const refetch = selectedQuery?.refetch
+  const dataUpdatedAt = selectedQuery?.dataUpdatedAt
 
   // Track last updated time
   useEffect(() => {
@@ -548,6 +583,16 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
       setLastUpdated(new Date(dataUpdatedAt))
     }
   }, [dataUpdatedAt])
+
+  // Derive counts from all query results
+  const counts = useMemo(() => {
+    const results: Record<string, number> = {}
+    resourcesToCount.forEach((resource, index) => {
+      const data = resourceQueries[index]?.data
+      results[resource.kind] = Array.isArray(data) ? data.length : 0
+    })
+    return results
+  }, [resourcesToCount, resourceQueries])
 
   // Reset sort and filters when kind changes
   useEffect(() => {
@@ -810,51 +855,18 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     return result
   }, [resources, searchTerm, statusFilter, problemFilters, showInactiveReplicaSets, labelSelector, ownerKind, ownerName, selectedKind.name, sortColumn, sortDirection, getSortValue, podMatchesProblemFilter, getWorkloadHealthLevel])
 
-  // Get count for each resource type - now uses dynamic resources
-  // Deduplicate to avoid redundant fetches (e.g., multiple API versions of same resource)
-  // Get resources to count - use kind as unique key since name can conflict (e.g., pods vs PodMetrics)
-  const resourcesToCount = useMemo(() => {
-    if (categories) {
-      return categories.flatMap(c => c.resources).map(r => ({
-        kind: r.kind,
-        name: r.name,
-        group: r.group,
-      }))
+  // Scroll to selected row when entering from deeplink
+  useEffect(() => {
+    if (selectedResource && selectedRowRef.current) {
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        selectedRowRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
+      })
     }
-    return CORE_RESOURCE_TYPES.map(t => ({
-      kind: t.label,
-      name: t.kind,
-      group: '',
-    }))
-  }, [categories])
-
-  // Fetch all resources using useQueries - shares cache with display query
-  // When user clicks a resource type, data is already available from counts fetch
-  const resourceQueries = useQueries({
-    queries: resourcesToCount.map((resource) => ({
-      queryKey: ['resources', resource.name, resource.group, namespace],
-      queryFn: async () => {
-        const params = new URLSearchParams()
-        if (namespace) params.set('namespace', namespace)
-        if (resource.group) params.set('group', resource.group)
-        const res = await fetch(`/api/resources/${resource.name}?${params}`)
-        if (!res.ok) return []
-        return res.json()
-      },
-      staleTime: 30000,
-      refetchInterval: 30000,
-    })),
-  })
-
-  // Derive counts from query results - memoized to avoid recalc on every render
-  const counts = useMemo(() => {
-    const results: Record<string, number> = {}
-    resourcesToCount.forEach((resource, index) => {
-      const data = resourceQueries[index]?.data
-      results[resource.kind] = Array.isArray(data) ? data.length : 0
-    })
-    return results
-  }, [resourcesToCount, resourceQueries])
+  }, [selectedResource, filteredResources]) // Re-run when resources load
 
   // Calculate category totals, filter empty kinds/groups, and sort (empty categories at bottom)
   const { sortedCategories, hiddenKindsCount, hiddenGroupsCount } = useMemo(() => {
@@ -1433,6 +1445,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                   return (
                     <ResourceRow
                       key={resource.metadata?.uid || `${resource.metadata?.namespace}-${resource.metadata?.name}`}
+                      ref={isSelected ? selectedRowRef : null}
                       resource={resource}
                       kind={selectedKind.name}
                       columns={columns}
@@ -1494,17 +1507,19 @@ interface ResourceRowProps {
   onClick?: () => void
 }
 
-function ResourceRow({ resource, kind, columns, isSelected, onClick }: ResourceRowProps) {
-  return (
-    <tr
-      onClick={onClick}
-      className={clsx(
-        'cursor-pointer transition-colors',
-        isSelected
-          ? 'bg-blue-500/20 hover:bg-blue-500/30'
-          : 'hover:bg-theme-surface/50'
-      )}
-    >
+const ResourceRow = forwardRef<HTMLTableRowElement, ResourceRowProps>(
+  function ResourceRow({ resource, kind, columns, isSelected, onClick }, ref) {
+    return (
+      <tr
+        ref={ref}
+        onClick={onClick}
+        className={clsx(
+          'cursor-pointer transition-colors',
+          isSelected
+            ? 'bg-blue-500/20 hover:bg-blue-500/30'
+            : 'hover:bg-theme-surface/50'
+        )}
+      >
       {columns.map((col) => (
         <td
           key={col.key}
@@ -1517,9 +1532,10 @@ function ResourceRow({ resource, kind, columns, isSelected, onClick }: ResourceR
           <CellContent resource={resource} kind={kind} column={col.key} />
         </td>
       ))}
-    </tr>
-  )
-}
+      </tr>
+    )
+  }
+)
 
 interface CellContentProps {
   resource: any
