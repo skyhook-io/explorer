@@ -135,57 +135,6 @@ export function isOperation(eventType: EventType): eventType is 'add' | 'update'
   return eventType === 'add' || eventType === 'update' || eventType === 'delete'
 }
 
-// Timeline event group (from /api/timeline with grouping)
-export interface EventGroup {
-  id: string
-  kind: string
-  name: string
-  namespace: string
-  events: TimelineEvent[]
-  children?: EventGroup[]
-  healthState?: HealthStatus
-  eventCount: number
-}
-
-// Timeline API response (from /api/timeline)
-export interface TimelineResponse {
-  groups?: EventGroup[]
-  ungrouped?: TimelineEvent[]
-  meta: TimelineMeta
-}
-
-// Timeline metadata
-export interface TimelineMeta {
-  totalEvents: number
-  groupCount?: number
-  queryTimeMs?: number
-  hasMore?: boolean
-  nextCursor?: string
-}
-
-// Timeline grouping mode
-export type TimelineGroupingMode = 'none' | 'owner' | 'app' | 'namespace'
-
-// Filter preset for timeline queries
-export interface FilterPreset {
-  name: string
-  excludeKinds?: string[]
-  includeKinds?: string[]
-  excludeNamePatterns?: string[]
-  excludeOperations?: EventType[]
-  includeEventTypes?: EventType[]
-  includeManaged?: boolean
-}
-
-// Timeline store stats
-export interface TimelineStats {
-  totalEvents: number
-  oldestEvent?: string
-  newestEvent?: string
-  storageBytes?: number
-  seenResources?: number
-}
-
 // Check if a resource kind is a top-level workload (representative in timeline)
 // These are the "root" resources that own/manage others
 export function isWorkloadKind(kind: string): boolean {

@@ -27,10 +27,9 @@ import (
 
 // Server is the Explorer HTTP server
 type Server struct {
-	router              *chi.Mux
-	broadcaster         *SSEBroadcaster
-	timelineBroadcaster *TimelineSSEBroadcaster
-	port                int
+	router      *chi.Mux
+	broadcaster *SSEBroadcaster
+	port        int
 	devMode             bool
 	staticFS            fs.FS
 }
@@ -46,11 +45,10 @@ type Config struct {
 // New creates a new server instance
 func New(cfg Config) *Server {
 	s := &Server{
-		router:              chi.NewRouter(),
-		broadcaster:         NewSSEBroadcaster(),
-		timelineBroadcaster: NewTimelineSSEBroadcaster(),
-		port:                cfg.Port,
-		devMode:             cfg.DevMode,
+		router:      chi.NewRouter(),
+		broadcaster: NewSSEBroadcaster(),
+		port:        cfg.Port,
+		devMode:     cfg.DevMode,
 	}
 
 	// Set up static file system
@@ -97,12 +95,6 @@ func (s *Server) setupRoutes() {
 		r.Get("/changes", s.handleChanges)
 		r.Get("/changes/{kind}/{namespace}/{name}/children", s.handleChangeChildren)
 
-		// New timeline API (replaces /changes with grouping and filtering)
-		r.Get("/timeline", s.handleTimeline)
-		r.Get("/timeline/stream", s.timelineBroadcaster.HandleTimelineSSE)
-		r.Get("/timeline/filters", s.handleTimelineFilters)
-		r.Get("/timeline/stats", s.handleTimelineStats)
-		r.Get("/timeline/{kind}/{namespace}/{name}/children", s.handleTimelineChildren)
 		// Pod logs
 		r.Get("/pods/{namespace}/{name}/logs", s.handlePodLogs)
 		r.Get("/pods/{namespace}/{name}/logs/stream", s.handlePodLogsStream)
@@ -180,7 +172,6 @@ func spaHandler(fsys http.FileSystem) http.Handler {
 // Start starts the server
 func (s *Server) Start() error {
 	s.broadcaster.Start()
-	s.timelineBroadcaster.Start()
 
 	addr := fmt.Sprintf(":%d", s.port)
 	log.Printf("Starting Explorer server on http://localhost%s", addr)
@@ -191,7 +182,6 @@ func (s *Server) Start() error {
 // Stop gracefully stops the server
 func (s *Server) Stop() {
 	s.broadcaster.Stop()
-	s.timelineBroadcaster.Stop()
 }
 
 // Handlers

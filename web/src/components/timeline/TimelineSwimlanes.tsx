@@ -31,7 +31,6 @@ import { buildResourceHierarchy, isProblematicEvent, type ResourceLane as BaseRe
 import {
   formatAxisTime,
   formatFullTime,
-  isRoutineEvent,
   buildHealthSpans,
   HealthSpan,
   timeToX as sharedTimeToX,
@@ -173,7 +172,6 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedLanes, setExpandedLanes] = useState<Set<string>>(new Set())
   const [hasAutoZoomed, setHasAutoZoomed] = useState(false)
-  const [showRoutineUpdates, setShowRoutineUpdates] = useState(false)
   const [groupByApp, setGroupByApp] = useState(true) // Group by app.kubernetes.io/name label
 
   // Stable lane ordering - use ref to avoid render loop (lanes depends on order, order depends on lanes)
@@ -241,32 +239,17 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
 
   // Filter events by search term
   const filteredEvents = useMemo(() => {
-    let filtered = events
+    if (!searchTerm) return events
 
-    // Filter out routine/noisy updates unless toggled on
-    if (!showRoutineUpdates) {
-      filtered = filtered.filter(e => !isRoutineEvent(e))
-    }
-
-    // Apply search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase()
-      filtered = filtered.filter(e =>
-        e.name.toLowerCase().includes(term) ||
-        e.kind.toLowerCase().includes(term) ||
-        e.namespace?.toLowerCase().includes(term) ||
-        e.reason?.toLowerCase().includes(term) ||
-        e.message?.toLowerCase().includes(term)
-      )
-    }
-
-    return filtered
-  }, [events, searchTerm, showRoutineUpdates])
-
-  // Count how many events are being filtered
-  const routineEventCount = useMemo(() => {
-    return events.filter(e => isRoutineEvent(e)).length
-  }, [events])
+    const term = searchTerm.toLowerCase()
+    return events.filter(e =>
+      e.name.toLowerCase().includes(term) ||
+      e.kind.toLowerCase().includes(term) ||
+      e.namespace?.toLowerCase().includes(term) ||
+      e.reason?.toLowerCase().includes(term) ||
+      e.message?.toLowerCase().includes(term)
+    )
+  }, [events, searchTerm])
 
   // Build hierarchical lanes using owner references + topology edges
   // Uses the shared utility from utils/resource-hierarchy.ts
@@ -457,7 +440,6 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
 
   // Compute empty state info (but don't early return - we need the toolbar visible)
   const hasFilteredEvents = visibleLanes.length === 0 && events.length > 0 && filteredEvents.length === 0
-  const hasRoutineOnly = visibleLanes.length === 0 && routineEventCount > 0 && routineEventCount === events.length
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -556,20 +538,6 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
               <span className="border-b border-dotted border-theme-text-tertiary">Group by app</span>
             </label>
           </Tooltip>
-          {/* Routine updates toggle */}
-          {routineEventCount > 0 && (
-            <Tooltip content="Include frequently-updating system resources like Leases, Endpoints, and leader-election ConfigMaps" position="bottom">
-              <label className="flex items-center gap-1.5 text-xs text-theme-text-secondary cursor-pointer hover:text-theme-text-primary">
-                <input
-                  type="checkbox"
-                  checked={showRoutineUpdates}
-                  onChange={(e) => setShowRoutineUpdates(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-theme-border-light bg-theme-elevated text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
-                />
-                <span className="border-b border-dotted border-theme-text-tertiary">Show routine events ({routineEventCount})</span>
-              </label>
-            </Tooltip>
-          )}
           {/* View toggle */}
           {onViewModeChange && (
             <div className="flex items-center gap-1 bg-theme-elevated rounded-lg p-1">
@@ -655,19 +623,6 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
                     {searchTerm ? `No results for "${searchTerm}"` : 'Try adjusting your filters'}
                   </p>
                   {namespace && <p className="text-sm mt-1 text-theme-text-disabled">Searching in namespace: {namespace}</p>}
-                </>
-              ) : hasRoutineOnly ? (
-                <>
-                  <p className="text-lg">Only routine events</p>
-                  <p className="text-sm mt-1">
-                    {routineEventCount} routine event{routineEventCount !== 1 ? 's' : ''} hidden.{' '}
-                    <button
-                      onClick={() => setShowRoutineUpdates(true)}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline"
-                    >
-                      Show them
-                    </button>
-                  </p>
                 </>
               ) : (
                 <>
@@ -915,31 +870,27 @@ interface LegendItemProps {
 
 function LegendItem({ color, label, description, dashed }: LegendItemProps) {
   return (
-    <span className="relative flex items-center gap-1 group cursor-help">
-      <span className={clsx(
-        'w-2 h-2 rounded-full',
-        dashed ? 'border border-dashed border-current bg-transparent' : color
-      )} />
-      <span>{label}</span>
-      {/* Hover tooltip */}
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-theme-base text-theme-text-primary rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-75 shadow-lg border border-theme-border-light">
-        {description}
+    <Tooltip content={description} position="top">
+      <span className="flex items-center gap-1 cursor-help">
+        <span className={clsx(
+          'w-2 h-2 rounded-full',
+          dashed ? 'border border-dashed border-current bg-transparent' : color
+        )} />
+        <span>{label}</span>
       </span>
-    </span>
+    </Tooltip>
   )
 }
 
 // Health bar legend item - shows a bar instead of a dot
 function HealthBarLegendItem({ color, label, description }: LegendItemProps) {
   return (
-    <span className="relative flex items-center gap-1 group cursor-help">
-      <span className={clsx('w-4 h-2 rounded-sm', color)} />
-      <span>{label}</span>
-      {/* Hover tooltip */}
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-theme-base text-theme-text-primary rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-75 shadow-lg border border-theme-border-light">
-        {description}
+    <Tooltip content={description} position="top">
+      <span className="flex items-center gap-1 cursor-help">
+        <span className={clsx('w-4 h-2 rounded-sm', color)} />
+        <span>{label}</span>
       </span>
-    </span>
+    </Tooltip>
   )
 }
 
