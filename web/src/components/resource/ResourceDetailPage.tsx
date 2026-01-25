@@ -26,7 +26,6 @@ import {
   ZOOM_LEVELS,
   type ZoomLevel,
   formatAxisTime,
-  isRoutineEvent,
   EventMarker,
   EventDotLegend,
   HealthSpanLegend,
@@ -59,7 +58,6 @@ export function ResourceDetailPage({
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [zoom, setZoom] = useState<ZoomLevel>(1) // 1 hour default
   const [selectedPod, setSelectedPod] = useState<string | null>(null)
-  const [showRoutineEvents, setShowRoutineEvents] = useState(false)
 
   // Fetch resource with relationships
   const { data: resourceResponse, isLoading: resourceLoading } = useResourceWithRelationships<any>(kind, namespace, name)
@@ -85,34 +83,18 @@ export function ResourceDetailPage({
   // This finds all related events (transitive children, topology relationships, app labels)
   const resourceLanes = useMemo(() => {
     if (!allEvents) return []
-    // Filter routine events before building hierarchy (unless showing routine events)
-    const filteredEvents = showRoutineEvents ? allEvents : allEvents.filter(e => !isRoutineEvent(e))
     return buildResourceHierarchy({
-      events: filteredEvents,
-      topology,
-      rootResource: { kind, namespace, name },
-      groupByApp: true,
-    })
-  }, [allEvents, topology, kind, namespace, name, showRoutineEvents])
-
-  // Get all events flattened for stats and compatibility
-  const resourceEvents = useMemo(() => {
-    return getAllEventsFromHierarchy(resourceLanes)
-  }, [resourceLanes])
-
-  // Count routine events that would be shown in the hierarchy
-  const routineEventCount = useMemo(() => {
-    if (!allEvents) return 0
-    // Build hierarchy without routine filter to count how many would be excluded
-    const fullLanes = buildResourceHierarchy({
       events: allEvents,
       topology,
       rootResource: { kind, namespace, name },
       groupByApp: true,
     })
-    const allHierarchyEvents = getAllEventsFromHierarchy(fullLanes)
-    return allHierarchyEvents.filter(isRoutineEvent).length
   }, [allEvents, topology, kind, namespace, name])
+
+  // Get all events flattened for stats and compatibility
+  const resourceEvents = useMemo(() => {
+    return getAllEventsFromHierarchy(resourceLanes)
+  }, [resourceLanes])
 
   // Extract metadata from resource
   const metadata = useMemo(() => extractMetadata(kind, resource), [kind, resource])
@@ -239,9 +221,6 @@ export function ResourceDetailPage({
             isLoading={eventsLoading}
             zoom={zoom}
             onZoomChange={setZoom}
-            showRoutine={showRoutineEvents}
-            routineCount={routineEventCount}
-            onToggleRoutine={setShowRoutineEvents}
             resourceKind={kind}
             resourceName={name}
             selectedEventId={selectedEventId}
@@ -576,9 +555,6 @@ function EventsTab({
   isLoading,
   zoom,
   onZoomChange,
-  showRoutine,
-  routineCount,
-  onToggleRoutine,
   resourceKind,
   resourceName,
   selectedEventId,
@@ -589,9 +565,6 @@ function EventsTab({
   isLoading: boolean
   zoom: ZoomLevel
   onZoomChange: (zoom: ZoomLevel) => void
-  showRoutine: boolean
-  routineCount: number
-  onToggleRoutine: (show: boolean) => void
   resourceKind: string
   resourceName: string
   selectedEventId: string | null
@@ -815,20 +788,7 @@ function EventsTab({
     <div className="h-full flex flex-col overflow-hidden">
       {/* Timeline toolbar */}
       <div className="flex-shrink-0 px-4 py-2 border-b border-theme-border bg-theme-surface/50 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-theme-text-secondary">Events ({events.length})</span>
-          {routineCount > 0 && (
-            <label className="flex items-center gap-1.5 text-xs text-theme-text-tertiary cursor-pointer hover:text-theme-text-secondary">
-              <input
-                type="checkbox"
-                checked={showRoutine}
-                onChange={(e) => onToggleRoutine(e.target.checked)}
-                className="w-3 h-3 rounded"
-              />
-              +{routineCount} routine
-            </label>
-          )}
-        </div>
+        <span className="text-sm font-medium text-theme-text-secondary">Events ({events.length})</span>
         <div className="flex items-center gap-3">
           <ZoomControls
             zoom={zoom}

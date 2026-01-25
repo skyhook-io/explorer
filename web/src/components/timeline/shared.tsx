@@ -22,26 +22,6 @@ import { isProblematicEvent } from '../../utils/resource-hierarchy'
 export const ZOOM_LEVELS = [0.5, 1, 2, 6, 12, 24, 48, 168] as const
 export type ZoomLevel = (typeof ZOOM_LEVELS)[number]
 
-/**
- * Known noisy resources that update constantly (leases, locks, status tracking)
- */
-const NOISY_NAME_PATTERNS = [
-  /^kube-scheduler$/,
-  /^kube-controller-manager$/,
-  /-leader-election$/,
-  /-lock$/,
-  /-lease$/,
-  /^cluster-autoscaler-status$/,
-  /^cluster-kubestore$/,
-  /^datadog-leader-election$/,
-  /^cert-manager-controller$/,
-]
-
-/**
- * Event kinds that are always noise (tracking their lifecycle is useless)
- */
-const NOISY_KINDS = new Set(['Lease', 'Endpoints', 'EndpointSlice', 'Event'])
-
 // ============================================================================
 // Time Formatting Utilities
 // ============================================================================
@@ -90,42 +70,6 @@ export function formatZoomLevel(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}m`
   if (hours < 24) return `${hours}h`
   return `${Math.round(hours / 24)}d`
-}
-
-// ============================================================================
-// Event Filtering
-// ============================================================================
-
-/**
- * Check if an event is "routine noise" (constant heartbeats, lease updates, etc.)
- */
-export function isRoutineEvent(event: TimelineEvent): boolean {
-  // Historical events are never routine - they capture meaningful state transitions
-  if (isHistoricalEvent(event)) return false
-
-  // K8s Event objects - their lifecycle (add/update/delete) is always noise
-  if (event.kind === 'Event' && isChangeEvent(event)) return true
-
-  // Only filter update operations for other kinds - adds and deletes are interesting
-  if (event.eventType !== 'update') return false
-
-  // Known noisy resource kinds (for updates)
-  if (NOISY_KINDS.has(event.kind)) return true
-
-  // Known noisy resource name patterns
-  if (NOISY_NAME_PATTERNS.some(pattern => pattern.test(event.name))) return true
-
-  // ConfigMaps with noisy suffixes
-  if (event.kind === 'ConfigMap') {
-    if (event.name.endsWith('-lock') ||
-        event.name.endsWith('-lease') ||
-        event.name.endsWith('-leader') ||
-        event.name.includes('kubestore')) {
-      return true
-    }
-  }
-
-  return false
 }
 
 // ============================================================================
