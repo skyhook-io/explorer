@@ -24,6 +24,9 @@ var (
 	kubeconfigPath  string
 	contextName     string
 	clusterName     string
+	// clientMu protects access to client variables during context switches.
+	// Readers use RLock, context switch uses Lock.
+	clientMu sync.RWMutex
 )
 
 // InitOptions configures the K8s client initialization
@@ -113,36 +116,50 @@ func doInit(opts InitOptions) error {
 
 // GetClient returns the K8s clientset
 func GetClient() *kubernetes.Clientset {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return k8sClient
 }
 
 // GetConfig returns the K8s rest config
 func GetConfig() *rest.Config {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return k8sConfig
 }
 
 // GetDiscoveryClient returns the K8s discovery client for API resource discovery
 func GetDiscoveryClient() *discovery.DiscoveryClient {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return discoveryClient
 }
 
 // GetDynamicClient returns the K8s dynamic client for CRD access
 func GetDynamicClient() dynamic.Interface {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return dynamicClient
 }
 
 // GetKubeconfigPath returns the path to the kubeconfig file used
 func GetKubeconfigPath() string {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return kubeconfigPath
 }
 
 // GetContextName returns the current kubeconfig context name
 func GetContextName() string {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return contextName
 }
 
 // GetClusterName returns the current cluster name from kubeconfig
 func GetClusterName() string {
+	clientMu.RLock()
+	defer clientMu.RUnlock()
 	return clusterName
 }
 
@@ -264,13 +281,15 @@ func SwitchContext(name string) error {
 		return fmt.Errorf("failed to create dynamic client for context %q: %w", name, err)
 	}
 
-	// Update global variables
+	// Update global variables atomically
+	clientMu.Lock()
 	k8sConfig = config
 	k8sClient = newK8sClient
 	discoveryClient = newDiscoveryClient
 	dynamicClient = newDynamicClient
 	contextName = name
 	clusterName = ctx.Cluster
+	clientMu.Unlock()
 
 	return nil
 }
