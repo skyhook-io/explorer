@@ -338,6 +338,8 @@ function PodQuickActions({ namespace, podName, isRunning }: PodQuickActionsProps
           containers: containers.map((c: { name: string }) => c.name),
         })
       }
+    } catch (error) {
+      console.error('Failed to open terminal:', error)
     } finally {
       setIsLoadingAction(false)
     }
@@ -353,6 +355,8 @@ function PodQuickActions({ namespace, podName, isRunning }: PodQuickActionsProps
         podName,
         containers: containers.map((c: { name: string }) => c.name),
       })
+    } catch (error) {
+      console.error('Failed to open logs:', error)
     } finally {
       setIsLoadingAction(false)
     }

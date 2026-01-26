@@ -73,17 +73,26 @@ See `values.yaml` for all configuration options.
 
 ## RBAC
 
-The chart creates a ClusterRole with read-only access to common Kubernetes resources:
+The chart creates a ClusterRole with read-only access to common Kubernetes resources.
 
-- Core: pods, services, configmaps, secrets, events, namespaces, nodes, pvcs
+**Default permissions (always enabled):**
+- Core: pods, services, configmaps, events, namespaces, nodes, pvcs, serviceaccounts, endpoints
 - Apps: deployments, daemonsets, statefulsets, replicasets
 - Networking: ingresses, networkpolicies
 - Batch: jobs, cronjobs
 - Autoscaling: horizontalpodautoscalers
-- Pod operations: exec, logs, port-forward (create)
 - CRDs: Argo, Knative, cert-manager, Gateway API
 
-Explorer uses its ServiceAccount permissions to access the Kubernetes API.
+**Opt-in permissions (disabled by default for security):**
+
+| Feature | Value | Description |
+|---------|-------|-------------|
+| Secrets | `rbac.secrets: true` | View secrets in resource list |
+| Terminal | `rbac.podExec: true` | Shell access to pods |
+| Port Forward | `rbac.portForward: true` | Port forwarding to pods |
+| Logs | `rbac.podLogs: true` | View pod logs (enabled by default) |
+
+Explorer uses its ServiceAccount permissions to access the Kubernetes API. The UI automatically detects which features are available based on RBAC and hides unavailable features.
 
 ## Upgrading
 

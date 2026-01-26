@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -46,37 +47,46 @@ func CheckCapabilities(ctx context.Context) (*Capabilities, error) {
 	}
 
 	if GetClient() == nil {
-		// Return all true if client not initialized (shouldn't happen)
-		return &Capabilities{Exec: true, Logs: true, PortForward: true, Secrets: true}, nil
+		// Return all false if client not initialized (fail closed)
+		log.Printf("Warning: K8s client not initialized, returning restricted capabilities")
+		return &Capabilities{Exec: false, Logs: false, PortForward: false, Secrets: false}, nil
 	}
 
-	caps := &Capabilities{}
-
-	// Check each capability in parallel
+	// Check each capability in parallel using local variables to avoid data race
 	var wg sync.WaitGroup
+	var execAllowed, logsAllowed, portForwardAllowed, secretsAllowed bool
+
 	wg.Add(4)
 
 	go func() {
 		defer wg.Done()
-		caps.Exec = canI(ctx, "", "pods/exec", "create")
+		execAllowed = canI(ctx, "", "pods/exec", "create")
 	}()
 
 	go func() {
 		defer wg.Done()
-		caps.Logs = canI(ctx, "", "pods/log", "get")
+		logsAllowed = canI(ctx, "", "pods/log", "get")
 	}()
 
 	go func() {
 		defer wg.Done()
-		caps.PortForward = canI(ctx, "", "pods/portforward", "create")
+		portForwardAllowed = canI(ctx, "", "pods/portforward", "create")
 	}()
 
 	go func() {
 		defer wg.Done()
-		caps.Secrets = canI(ctx, "", "secrets", "list")
+		secretsAllowed = canI(ctx, "", "secrets", "list")
 	}()
 
 	wg.Wait()
+
+	// Build capabilities struct after all goroutines complete
+	caps := &Capabilities{
+		Exec:        execAllowed,
+		Logs:        logsAllowed,
+		PortForward: portForwardAllowed,
+		Secrets:     secretsAllowed,
+	}
 
 	// Cache the result
 	cachedCapabilities = caps
@@ -89,7 +99,8 @@ func CheckCapabilities(ctx context.Context) (*Capabilities, error) {
 func canI(ctx context.Context, namespace, resource, verb string) bool {
 	k8sClient := GetClient()
 	if k8sClient == nil {
-		return true // Assume allowed if no client
+		log.Printf("Warning: K8s client nil in canI check for %s %s", verb, resource)
+		return false // Fail closed if no client
 	}
 
 	review := &authv1.SelfSubjectAccessReview{
@@ -104,7 +115,8 @@ func canI(ctx context.Context, namespace, resource, verb string) bool {
 
 	result, err := k8sClient.AuthorizationV1().SelfSubjectAccessReviews().Create(ctx, review, metav1.CreateOptions{})
 	if err != nil {
-		// If we can't check, assume not allowed (fail closed)
+		// Log the error and fail closed
+		log.Printf("Warning: SelfSubjectAccessReview failed for %s %s: %v", verb, resource, err)
 		return false
 	}
 

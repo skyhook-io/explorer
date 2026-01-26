@@ -57,6 +57,12 @@ rules:
       - horizontalpodautoscalers
     verbs: ["get", "list", "watch"]
 
+  # Authorization (required for capability detection via SelfSubjectAccessReview)
+  - apiGroups: ["authorization.k8s.io"]
+    resources:
+      - selfsubjectaccessreviews
+    verbs: ["create"]
+
   {{- if .Values.rbac.podLogs }}
   # Pod logs (opt-in - enables log viewer)
   - apiGroups: [""]
