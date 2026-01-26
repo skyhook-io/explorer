@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { TrafficSourcesResponse, TrafficWizardState } from '../../types'
-import { Loader2, CheckCircle2, XCircle, Copy, ExternalLink, ArrowRight, ArrowLeft, Package } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, AlertTriangle, Copy, ExternalLink, ArrowRight, ArrowLeft, Package } from 'lucide-react'
 import { InstallWizard } from '../helm/InstallWizard'
 
 interface TrafficWizardProps {
@@ -191,6 +191,20 @@ export function TrafficWizard({
                 )}
               </div>
             </div>
+
+            {/* Detection errors */}
+            {sourcesData?.detected.filter(s => s.status === 'error').map(source => (
+              <div key={source.name} className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm">
+                    <span className="font-medium text-red-400 capitalize">{source.name}</span>
+                    <span className="text-theme-text-secondary"> detection failed: </span>
+                    <span className="text-theme-text-tertiary">{source.message}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
 
             {/* Recommendation */}
             {recommendation && (
