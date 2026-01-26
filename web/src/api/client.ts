@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import type {
   Topology,
   ClusterInfo,
+  Capabilities,
   ContextInfo,
   Namespace,
   TimelineEvent,
@@ -39,6 +40,15 @@ export function useClusterInfo() {
     queryKey: ['cluster-info'],
     queryFn: () => fetchJSON('/cluster-info'),
     staleTime: 60000, // 1 minute
+  })
+}
+
+// Capabilities (RBAC-based feature flags)
+export function useCapabilities() {
+  return useQuery<Capabilities>({
+    queryKey: ['capabilities'],
+    queryFn: () => fetchJSON('/capabilities'),
+    staleTime: 60000, // 1 minute - cached on backend too
   })
 }
 

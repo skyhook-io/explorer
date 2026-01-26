@@ -14,6 +14,7 @@ import { PortForwardManager, usePortForwardCount } from './components/portforwar
 import { DockProvider, BottomDock, useDock } from './components/dock'
 import { ContextSwitcher } from './components/ContextSwitcher'
 import { ContextSwitchProvider, useContextSwitch } from './context/ContextSwitchContext'
+import { CapabilitiesProvider } from './contexts/CapabilitiesContext'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { useEventSource } from './hooks/useEventSource'
 import { useClusterInfo, useNamespaces } from './api/client'
@@ -697,11 +698,13 @@ function DockSpacer() {
 // Main App component wrapped with providers
 function App() {
   return (
-    <ContextSwitchProvider>
-      <DockProvider>
-        <AppInner />
-      </DockProvider>
-    </ContextSwitchProvider>
+    <CapabilitiesProvider>
+      <ContextSwitchProvider>
+        <DockProvider>
+          <AppInner />
+        </DockProvider>
+      </ContextSwitchProvider>
+    </CapabilitiesProvider>
   )
 }
 

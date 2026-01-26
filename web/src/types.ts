@@ -1,5 +1,13 @@
 // Topology types matching the Go backend
 
+// Feature capabilities based on RBAC permissions
+export interface Capabilities {
+  exec: boolean        // Terminal feature (pods/exec)
+  logs: boolean        // Log viewer (pods/log)
+  portForward: boolean // Port forwarding (pods/portforward)
+  secrets: boolean     // List secrets
+}
+
 export type NodeKind =
   | 'Internet'
   | 'Ingress'

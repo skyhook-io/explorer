@@ -5,6 +5,7 @@ import { formatResources } from '../resource-utils'
 import { PortForwardInlineButton } from '../../portforward/PortForwardButton'
 import { useOpenTerminal, useOpenLogs } from '../../dock'
 import { Tooltip } from '../../ui/Tooltip'
+import { useCanExec, useCanViewLogs, useCanPortForward } from '../../../contexts/CapabilitiesContext'
 
 interface PodRendererProps {
   data: any
@@ -86,6 +87,11 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
 
   const openTerminal = useOpenTerminal()
   const openLogs = useOpenLogs()
+
+  // Check capabilities
+  const canExec = useCanExec()
+  const canViewLogs = useCanViewLogs()
+  const canPortForward = useCanPortForward()
 
   // Check for problems
   const problems = getPodProblems(data)
@@ -184,7 +190,7 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-theme-text-primary">{container.name}</span>
                   <div className="flex items-center gap-2">
-                    {stateKey === 'running' && (
+                    {stateKey === 'running' && canExec && (
                       <button
                         onClick={() => handleOpenTerminal(container.name)}
                         className="p-1 text-slate-400 hover:text-blue-400 hover:bg-slate-600/50 rounded transition-colors"
@@ -193,13 +199,15 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
                         <TerminalIcon className="w-4 h-4" />
                       </button>
                     )}
-                    <button
-                      onClick={() => handleOpenLogs(container.name)}
-                      className="p-1 text-slate-400 hover:text-blue-400 hover:bg-slate-600/50 rounded transition-colors"
-                      title={`View logs for ${container.name}`}
-                    >
-                      <FileText className="w-4 h-4" />
-                    </button>
+                    {canViewLogs && (
+                      <button
+                        onClick={() => handleOpenLogs(container.name)}
+                        className="p-1 text-slate-400 hover:text-blue-400 hover:bg-slate-600/50 rounded transition-colors"
+                        title={`View logs for ${container.name}`}
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                    )}
                     <span className={clsx(
                       'px-2 py-0.5 text-xs rounded',
                       isReady ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
@@ -259,14 +267,20 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span>Ports:</span>
                       {container.ports.map((p: any) => (
-                        <PortForwardInlineButton
-                          key={`${p.containerPort}-${p.protocol || 'TCP'}`}
-                          namespace={namespace}
-                          podName={podName}
-                          port={p.containerPort}
-                          protocol={p.protocol || 'TCP'}
-                          disabled={!isRunning}
-                        />
+                        canPortForward ? (
+                          <PortForwardInlineButton
+                            key={`${p.containerPort}-${p.protocol || 'TCP'}`}
+                            namespace={namespace}
+                            podName={podName}
+                            port={p.containerPort}
+                            protocol={p.protocol || 'TCP'}
+                            disabled={!isRunning}
+                          />
+                        ) : (
+                          <span key={`${p.containerPort}-${p.protocol || 'TCP'}`} className="text-theme-text-tertiary">
+                            {p.containerPort}/{p.protocol || 'TCP'}
+                          </span>
+                        )
                       ))}
                     </div>
                   )}

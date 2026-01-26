@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useOpenTerminal, useOpenLogs } from '../dock'
 import { useStartPortForward } from '../portforward/PortForwardManager'
 import { useAvailablePorts } from '../../api/client'
+import { useCanExec, useCanViewLogs, useCanPortForward } from '../../contexts/CapabilitiesContext'
 
 interface OwnedResourcesProps {
   resources: HelmOwnedResource[]
@@ -303,6 +304,11 @@ function PodQuickActions({ namespace, podName, isRunning }: PodQuickActionsProps
   const startPortForward = useStartPortForward()
   const { data: portsData, isLoading: portsLoading } = useAvailablePorts('pod', namespace, podName)
 
+  // Check capabilities
+  const canExec = useCanExec()
+  const canViewLogs = useCanViewLogs()
+  const canPortForward = useCanPortForward()
+
   const [isLoadingAction, setIsLoadingAction] = useState(false)
 
   // Fetch pod data using React Query cache - shared with resource views
@@ -367,7 +373,7 @@ function PodQuickActions({ namespace, podName, isRunning }: PodQuickActionsProps
       {isLoadingAction && <Loader2 className="w-3.5 h-3.5 animate-spin text-theme-text-tertiary" />}
 
       {/* Terminal */}
-      {isRunning && (
+      {isRunning && canExec && (
         <button
           onClick={(e) => { e.stopPropagation(); handleOpenTerminal() }}
           disabled={isLoadingAction}
@@ -379,17 +385,19 @@ function PodQuickActions({ namespace, podName, isRunning }: PodQuickActionsProps
       )}
 
       {/* Logs */}
-      <button
-        onClick={(e) => { e.stopPropagation(); handleOpenLogs() }}
-        disabled={isLoadingAction}
-        className="p-1 text-theme-text-tertiary hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors disabled:opacity-50"
-        title="View logs"
-      >
-        <FileText className="w-3.5 h-3.5" />
-      </button>
+      {canViewLogs && (
+        <button
+          onClick={(e) => { e.stopPropagation(); handleOpenLogs() }}
+          disabled={isLoadingAction}
+          className="p-1 text-theme-text-tertiary hover:text-blue-400 hover:bg-blue-500/10 rounded transition-colors disabled:opacity-50"
+          title="View logs"
+        >
+          <FileText className="w-3.5 h-3.5" />
+        </button>
+      )}
 
       {/* Port Forward */}
-      {!portsLoading && ports.length > 0 && (
+      {canPortForward && !portsLoading && ports.length > 0 && (
         <button
           onClick={(e) => { e.stopPropagation(); handlePortForward(ports[0].port) }}
           disabled={startPortForward.isPending}
@@ -416,6 +424,7 @@ interface ServiceQuickActionsProps {
 function ServiceQuickActions({ namespace, serviceName }: ServiceQuickActionsProps) {
   const startPortForward = useStartPortForward()
   const { data: portsData, isLoading: portsLoading } = useAvailablePorts('service', namespace, serviceName)
+  const canPortForward = useCanPortForward()
 
   const handlePortForward = useCallback((port: number) => {
     startPortForward.mutate({
@@ -427,7 +436,7 @@ function ServiceQuickActions({ namespace, serviceName }: ServiceQuickActionsProp
 
   const ports = portsData?.ports || []
 
-  if (portsLoading || ports.length === 0) return null
+  if (!canPortForward || portsLoading || ports.length === 0) return null
 
   return (
     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
