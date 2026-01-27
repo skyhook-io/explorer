@@ -39,10 +39,11 @@ var initialSyncComplete bool
 // ResourceCache provides fast, eventually-consistent access to K8s resources
 // using SharedInformers. Optimized for small-mid sized clusters.
 type ResourceCache struct {
-	factory  informers.SharedInformerFactory
-	changes  chan ResourceChange
-	stopCh   chan struct{}
-	stopOnce sync.Once
+	factory        informers.SharedInformerFactory
+	changes        chan ResourceChange
+	stopCh         chan struct{}
+	stopOnce       sync.Once
+	secretsEnabled bool // Whether secrets informer is running (requires RBAC)
 }
 
 // ResourceChange represents a resource change event
@@ -121,13 +122,23 @@ func InitResourceCache() error {
 		stopCh := make(chan struct{})
 		changes := make(chan ResourceChange, 10000)
 
+		// Check if we have secrets permission before creating informer
+		// This prevents crash loops when RBAC doesn't allow secrets access
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		caps, _ := CheckCapabilities(ctx)
+		cancel()
+		secretsEnabled := caps != nil && caps.Secrets
+
 		// Core resources
 		svcInf := factory.Core().V1().Services().Informer()
 		podInf := factory.Core().V1().Pods().Informer()
 		nodeInf := factory.Core().V1().Nodes().Informer()
 		nsInf := factory.Core().V1().Namespaces().Informer()
 		cmInf := factory.Core().V1().ConfigMaps().Informer()
-		secretInf := factory.Core().V1().Secrets().Informer()
+		var secretInf cache.SharedIndexInformer
+		if secretsEnabled {
+			secretInf = factory.Core().V1().Secrets().Informer()
+		}
 		eventInf := factory.Core().V1().Events().Informer()
 		pvcInf := factory.Core().V1().PersistentVolumeClaims().Informer()
 
@@ -154,7 +165,6 @@ func InitResourceCache() error {
 			addChangeHandlers(nodeInf, "Node", changes),
 			addChangeHandlers(nsInf, "Namespace", changes),
 			addChangeHandlers(cmInf, "ConfigMap", changes),
-			addChangeHandlers(secretInf, "Secret", changes),
 			addK8sEventHandlers(eventInf, changes), // K8s Events get special handling
 			addChangeHandlers(pvcInf, "PersistentVolumeClaim", changes),
 			addChangeHandlers(depInf, "Deployment", changes),
@@ -165,6 +175,9 @@ func InitResourceCache() error {
 			addChangeHandlers(jobInf, "Job", changes),
 			addChangeHandlers(cronJobInf, "CronJob", changes),
 			addChangeHandlers(hpaInf, "HorizontalPodAutoscaler", changes),
+		}
+		if secretsEnabled {
+			handlerErrors = append(handlerErrors, addChangeHandlers(secretInf, "Secret", changes))
 		}
 		for _, err := range handlerErrors {
 			if err != nil {
@@ -177,17 +190,20 @@ func InitResourceCache() error {
 		// Start all informers
 		factory.Start(stopCh)
 
-		log.Println("Starting resource cache with SharedInformers for 16 resource types")
+		resourceCount := 15 // Base resource types without secrets
+		if secretsEnabled {
+			resourceCount = 16
+		}
+		log.Printf("Starting resource cache with SharedInformers for %d resource types (secrets=%v)", resourceCount, secretsEnabled)
 		syncStart := time.Now()
 
-		// Wait for caches to sync
-		if !cache.WaitForCacheSync(stopCh,
+		// Build list of sync functions - secrets is optional
+		syncFuncs := []cache.InformerSynced{
 			svcInf.HasSynced,
 			podInf.HasSynced,
 			nodeInf.HasSynced,
 			nsInf.HasSynced,
 			cmInf.HasSynced,
-			secretInf.HasSynced,
 			eventInf.HasSynced,
 			pvcInf.HasSynced,
 			depInf.HasSynced,
@@ -198,7 +214,13 @@ func InitResourceCache() error {
 			jobInf.HasSynced,
 			cronJobInf.HasSynced,
 			hpaInf.HasSynced,
-		) {
+		}
+		if secretsEnabled {
+			syncFuncs = append(syncFuncs, secretInf.HasSynced)
+		}
+
+		// Wait for caches to sync
+		if !cache.WaitForCacheSync(stopCh, syncFuncs...) {
 			close(stopCh)
 			initErr = explorerErrors.New(explorerErrors.ErrCacheSyncFailed,
 				"failed to sync resource caches")
@@ -211,9 +233,10 @@ func InitResourceCache() error {
 		initialSyncComplete = true
 
 		resourceCache = &ResourceCache{
-			factory: factory,
-			changes: changes,
-			stopCh:  stopCh,
+			factory:        factory,
+			changes:        changes,
+			stopCh:         stopCh,
+			secretsEnabled: secretsEnabled,
 		}
 	})
 	return initErr
@@ -795,7 +818,7 @@ func (c *ResourceCache) ConfigMaps() listerscorev1.ConfigMapLister {
 }
 
 func (c *ResourceCache) Secrets() listerscorev1.SecretLister {
-	if c == nil {
+	if c == nil || !c.secretsEnabled {
 		return nil
 	}
 	return c.factory.Core().V1().Secrets().Lister()
@@ -1187,7 +1210,11 @@ func (c *ResourceCache) GetResourceStatus(kind, namespace, name string) *Resourc
 		}
 
 	case "secret", "secrets":
-		_, err := c.Secrets().Secrets(namespace).Get(name)
+		lister := c.Secrets()
+		if lister == nil {
+			return nil
+		}
+		_, err := lister.Secrets(namespace).Get(name)
 		if err != nil {
 			return nil
 		}

@@ -363,10 +363,14 @@ func (s *Server) handleListResources(w http.ResponseWriter, r *http.Request) {
 			result, err = cache.ConfigMaps().List(labels.Everything())
 		}
 	case "secrets":
-		if namespace != "" {
-			result, err = cache.Secrets().Secrets(namespace).List(labels.Everything())
+		lister := cache.Secrets()
+		if lister == nil {
+			// Secrets not available (RBAC not granted)
+			result = []interface{}{}
+		} else if namespace != "" {
+			result, err = lister.Secrets(namespace).List(labels.Everything())
 		} else {
-			result, err = cache.Secrets().List(labels.Everything())
+			result, err = lister.List(labels.Everything())
 		}
 	case "events":
 		if namespace != "" {
@@ -463,7 +467,12 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *http.Request) {
 	case "configmaps", "configmap":
 		resource, err = cache.ConfigMaps().ConfigMaps(namespace).Get(name)
 	case "secrets", "secret":
-		resource, err = cache.Secrets().Secrets(namespace).Get(name)
+		lister := cache.Secrets()
+		if lister == nil {
+			s.writeError(w, http.StatusForbidden, "secrets access not available (RBAC not granted)")
+			return
+		}
+		resource, err = lister.Secrets(namespace).Get(name)
 	case "persistentvolumeclaims", "persistentvolumeclaim", "pvcs", "pvc":
 		resource, err = cache.PersistentVolumeClaims().PersistentVolumeClaims(namespace).Get(name)
 	case "hpas", "hpa", "horizontalpodautoscaler", "horizontalpodautoscalers":
