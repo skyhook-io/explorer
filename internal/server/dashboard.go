@@ -209,7 +209,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	resp.HelmReleases = s.getDashboardHelmSummary(namespace)
 
 	// CRD counts
-	resp.TopCRDs = s.getDashboardCRDCounts(namespace)
+	resp.TopCRDs = s.getDashboardCRDCounts(r.Context(), namespace)
 
 	// Cluster metrics (best-effort, nil if metrics-server unavailable)
 	resp.Metrics = s.getDashboardMetrics(r.Context())
@@ -787,15 +787,18 @@ func (s *Server) getDashboardRecentChanges(ctx context.Context, namespace string
 }
 
 func (s *Server) getDashboardTopologySummary(namespace string) DashboardTopologySummary {
-	// Use cached topology from SSE broadcaster first
-	if cachedTopo := s.broadcaster.GetCachedTopology(); cachedTopo != nil {
-		return DashboardTopologySummary{
-			NodeCount: len(cachedTopo.Nodes),
-			EdgeCount: len(cachedTopo.Edges),
+	// Use cached topology only when no namespace filter is active,
+	// since the cached topology's namespace scope may not match the request.
+	if namespace == "" {
+		if cachedTopo := s.broadcaster.GetCachedTopology(); cachedTopo != nil {
+			return DashboardTopologySummary{
+				NodeCount: len(cachedTopo.Nodes),
+				EdgeCount: len(cachedTopo.Edges),
+			}
 		}
 	}
 
-	// Fallback: build topology
+	// Build topology with the requested namespace filter
 	opts := topology.DefaultBuildOptions()
 	opts.Namespace = namespace
 	builder := topology.NewBuilder()
@@ -1083,7 +1086,7 @@ func truncate(s string, maxLen int) string {
 }
 
 // getDashboardCRDCounts returns counts of CRD instances in the cluster.
-func (s *Server) getDashboardCRDCounts(namespace string) []DashboardCRDCount {
+func (s *Server) getDashboardCRDCounts(reqCtx context.Context, namespace string) []DashboardCRDCount {
 	discovery := k8s.GetResourceDiscovery()
 	if discovery == nil {
 		return nil
@@ -1110,7 +1113,7 @@ func (s *Server) getDashboardCRDCounts(namespace string) []DashboardCRDCount {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(reqCtx, 3*time.Second)
 	defer cancel()
 
 	type result struct {
