@@ -52,6 +52,7 @@ import {
 } from './renderers'
 import { useOpenTerminal, useOpenLogs } from '../dock'
 import { PortForwardButton } from '../portforward/PortForwardButton'
+import { useCanExec, useCanViewLogs, useCanPortForward } from '../../contexts/CapabilitiesContext'
 import { useToast } from '../ui/Toast'
 import { CodeViewer } from '../ui/CodeViewer'
 import { YamlEditor } from '../ui/YamlEditor'
@@ -374,6 +375,11 @@ function ActionsBar({ resource, data, onClose }: ActionsBarProps) {
   const openLogs = useOpenLogs()
   const kind = resource.kind.toLowerCase()
 
+  // Check capabilities
+  const canExec = useCanExec()
+  const canViewLogs = useCanViewLogs()
+  const canPortForward = useCanPortForward()
+
   // Delete confirmation state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const deleteMutation = useDeleteResource()
@@ -427,7 +433,7 @@ function ActionsBar({ resource, data, onClose }: ActionsBarProps) {
       {/* Pod actions */}
       {kind === 'pods' && (
         <>
-          {isRunning && (
+          {isRunning && canExec && (
             <button
               onClick={handleOpenTerminal}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
@@ -436,14 +442,16 @@ function ActionsBar({ resource, data, onClose }: ActionsBarProps) {
               Terminal
             </button>
           )}
-          <button
-            onClick={handleOpenLogs}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors"
-          >
-            <FileText className="w-3.5 h-3.5" />
-            Logs
-          </button>
-          {isRunning && resource.namespace && resource.name && (
+          {canViewLogs && (
+            <button
+              onClick={handleOpenLogs}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors"
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Logs
+            </button>
+          )}
+          {isRunning && canPortForward && resource.namespace && resource.name && (
             <PortForwardButton
               type="pod"
               namespace={resource.namespace}
@@ -455,7 +463,7 @@ function ActionsBar({ resource, data, onClose }: ActionsBarProps) {
       )}
 
       {/* Service actions */}
-      {kind === 'services' && resource.namespace && resource.name && (
+      {kind === 'services' && canPortForward && resource.namespace && resource.name && (
         <PortForwardButton
           type="service"
           namespace={resource.namespace}

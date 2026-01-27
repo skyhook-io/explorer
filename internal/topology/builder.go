@@ -751,13 +751,18 @@ func (b *Builder) buildResourcesTopology(opts BuildOptions) (*Topology, error) {
 		}
 	}
 
-	// 9. Add Secret nodes (if enabled)
+	// 9. Add Secret nodes (if enabled and RBAC permits)
 	if opts.IncludeSecrets {
-		secrets, err := b.cache.Secrets().List(labels.Everything())
-		if err != nil {
-			log.Printf("WARNING [topology] Failed to list Secrets: %v", err)
-			warnings = append(warnings, fmt.Sprintf("Failed to list Secrets: %v", err))
-		}
+		secretLister := b.cache.Secrets()
+		if secretLister == nil {
+			log.Printf("WARNING [topology] Secrets not available (RBAC not granted)")
+			warnings = append(warnings, "Secrets not available (RBAC not granted)")
+		} else {
+			secrets, err := secretLister.List(labels.Everything())
+			if err != nil {
+				log.Printf("WARNING [topology] Failed to list Secrets: %v", err)
+				warnings = append(warnings, fmt.Sprintf("Failed to list Secrets: %v", err))
+			}
 		for _, secret := range secrets {
 			if opts.Namespace != "" && secret.Namespace != opts.Namespace {
 				continue
@@ -797,6 +802,7 @@ func (b *Builder) buildResourcesTopology(opts BuildOptions) (*Topology, error) {
 					},
 				})
 			}
+		}
 		}
 	}
 
