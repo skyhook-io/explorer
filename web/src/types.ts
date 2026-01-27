@@ -196,7 +196,7 @@ export interface Namespace {
 }
 
 // Main view type (which screen we're on)
-export type MainView = 'topology' | 'resources' | 'timeline' | 'helm'
+export type MainView = 'home' | 'topology' | 'resources' | 'timeline' | 'helm'
 
 // Topology view mode (for backwards compatibility, also exported as ViewMode)
 // NOTE: Must match Go backend constants in internal/topology/types.go

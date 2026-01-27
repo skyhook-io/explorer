@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
+import { HomeView } from './components/home/HomeView'
 import { TopologyGraph } from './components/topology/TopologyGraph'
 import { TopologyFilterSidebar } from './components/topology/TopologyFilterSidebar'
 import { TimelineView } from './components/timeline/TimelineView'
@@ -17,9 +18,9 @@ import { ContextSwitchProvider, useContextSwitch } from './context/ContextSwitch
 import { CapabilitiesProvider } from './contexts/CapabilitiesContext'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { useEventSource } from './hooks/useEventSource'
-import { useClusterInfo, useNamespaces } from './api/client'
+import { useNamespaces } from './api/client'
 import { Loader2 } from 'lucide-react'
-import { ChevronDown, RefreshCw, FolderTree, Network, List, Clock, Package, Sun, Moon, Activity } from 'lucide-react'
+import { ChevronDown, RefreshCw, FolderTree, Network, List, Clock, Package, Sun, Moon, Activity, Home } from 'lucide-react'
 import { useTheme } from './context/ThemeContext'
 import type { TopologyNode, GroupingMode, MainView, SelectedResource, SelectedHelmRelease, NodeKind, Topology } from './types'
 
@@ -99,12 +100,13 @@ type ExtendedMainView = MainView | 'traffic'
 // Extract view from URL path
 function getViewFromPath(pathname: string): ExtendedMainView {
   const path = pathname.replace(/^\//, '').split('/')[0]
-  if (path === 'topology' || path === '') return 'topology'
+  if (path === '' || path === 'home') return 'home'
+  if (path === 'topology') return 'topology'
   if (path === 'resources') return 'resources'
   if (path === 'timeline') return 'timeline'
   if (path === 'helm') return 'helm'
   if (path === 'traffic') return 'traffic'
-  return 'topology'
+  return 'home'
 }
 
 function AppInner() {
@@ -130,7 +132,7 @@ function AppInner() {
 
   // Set mainView by navigating to the path
   const setMainView = useCallback((view: ExtendedMainView) => {
-    const path = `/${view}`
+    const path = view === 'home' ? '/' : `/${view}`
 
     // Clean up view-specific params
     const newParams = new URLSearchParams(searchParams)
@@ -196,7 +198,6 @@ function AppInner() {
   const hideGroupHeader = isSingleNamespace && groupingMode === 'none'
 
   // Fetch cluster info and namespaces
-  const { data: clusterInfo } = useClusterInfo()
   const { data: namespaces } = useNamespaces()
 
   // Context switch state
@@ -366,7 +367,7 @@ function AppInner() {
   return (
     <div className="flex flex-col h-screen bg-theme-base">
       {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2 bg-theme-surface border-b border-theme-border">
+      <header className="relative flex items-center justify-between px-4 py-2 bg-theme-surface border-b border-theme-border">
         {/* Left: Logo + Cluster info */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
@@ -376,11 +377,6 @@ function AppInner() {
 
           <div className="flex items-center gap-2">
             <ContextSwitcher />
-            {clusterInfo && (
-              <span className="text-xs text-theme-text-tertiary hidden lg:inline">
-                {clusterInfo.platform} · {clusterInfo.kubernetesVersion}
-              </span>
-            )}
             {/* Connection status - next to cluster name */}
             <div className="flex items-center gap-1.5 ml-1">
               <span
@@ -404,8 +400,19 @@ function AppInner() {
           </div>
         </div>
 
-        {/* Center: View tabs */}
-        <div className="flex items-center gap-1 bg-theme-elevated/50 rounded-lg p-1">
+        {/* Center: View tabs (absolutely centered) */}
+        <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 bg-theme-elevated/50 rounded-lg p-1">
+          <button
+            onClick={() => setMainView('home')}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors ${
+              mainView === 'home'
+                ? 'bg-blue-500 text-theme-text-primary'
+                : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-hover'
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span className="hidden sm:inline">Home</span>
+          </button>
           <button
             onClick={() => setMainView('topology')}
             className={`flex items-center gap-1.5 px-2.5 py-1.5 text-sm rounded-md transition-colors ${
@@ -532,6 +539,38 @@ function AppInner() {
       {/* Main content */}
       {!isSwitching && <div className="flex-1 flex overflow-hidden">
         <ErrorBoundary>
+        {/* Home dashboard */}
+        {mainView === 'home' && (
+          <HomeView
+            namespace={namespace}
+            topology={topology}
+            onNavigateToView={setMainView}
+            onNavigateToResourceKind={(kind, apiGroup) => {
+              // Navigate to resources view with kind pre-selected via URL param
+              const newParams = new URLSearchParams(searchParams)
+              newParams.set('kind', kind)
+              newParams.delete('mode')
+              newParams.delete('resource')
+              if (apiGroup) {
+                newParams.set('apiGroup', apiGroup)
+              } else {
+                newParams.delete('apiGroup')
+              }
+              navigate({ pathname: '/resources', search: newParams.toString() })
+            }}
+            onNavigateToResource={(resource) => {
+              // Switch to resources view and open the resource detail drawer
+              setSelectedResource(resource)
+              const newParams = new URLSearchParams(searchParams)
+              newParams.set('kind', resource.kind)
+              newParams.delete('mode')
+              newParams.delete('group')
+              newParams.delete('resource')
+              navigate({ pathname: '/resources', search: newParams.toString() })
+            }}
+          />
+        )}
+
         {/* Topology view */}
         {mainView === 'topology' && (
           <>

@@ -82,6 +82,7 @@ func (s *Server) setupRoutes() {
 	// API routes
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/health", s.handleHealth)
+		r.Get("/dashboard", s.handleDashboard)
 		r.Get("/cluster-info", s.handleClusterInfo)
 		r.Get("/capabilities", s.handleCapabilities)
 		r.Get("/topology", s.handleTopology)

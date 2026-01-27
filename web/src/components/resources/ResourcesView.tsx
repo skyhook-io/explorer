@@ -339,7 +339,7 @@ const DEFAULT_KIND_INFO: SelectedKindInfo = { name: 'pods', kind: 'Pod', group: 
 function getInitialKindFromURL(): SelectedKindInfo {
   const params = new URLSearchParams(window.location.search)
   const kind = params.get('kind')
-  const group = params.get('group') || ''
+  const group = params.get('apiGroup') || ''
   if (kind) {
     // Find matching resource from CORE_RESOURCES or use as-is
     const coreMatch = CORE_RESOURCES.find(r => r.kind === kind || r.name === kind)
@@ -394,6 +394,22 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
 
   // Ref to selected row for scrolling into view on deeplink
   const selectedRowRef = useRef<HTMLTableRowElement>(null)
+  // Ref to search input for keyboard shortcut
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  // Keyboard shortcut: / or Cmd/Ctrl+K to focus search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === '/' || ((e.metaKey || e.ctrlKey) && e.key === 'k')) {
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   // Sync state from URL when navigation occurs (e.g., deep linking from WorkloadRenderer)
   useEffect(() => {
@@ -439,9 +455,9 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     // Set/update resources-specific params
     params.set('kind', kindInfo.kind)
     if (kindInfo.group) {
-      params.set('group', kindInfo.group)
+      params.set('apiGroup', kindInfo.group)
     } else {
-      params.delete('group')
+      params.delete('apiGroup')
     }
     if (search) {
       params.set('search', search)
@@ -530,6 +546,18 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     if (!apiResources) return null
     return categorizeResources(apiResources)
   }, [apiResources])
+
+  // Auto-expand the sidebar category containing the selected kind (e.g., when deep-linking to a CRD)
+  useEffect(() => {
+    if (!categories) return
+    for (const cat of categories) {
+      const match = cat.resources.some(r => r.kind === selectedKind.kind || r.name === selectedKind.name)
+      if (match && !expandedCategories.has(cat.name)) {
+        setExpandedCategories(prev => new Set([...prev, cat.name]))
+        break
+      }
+    }
+  }, [categories, selectedKind.kind, selectedKind.name])
 
   // Get resources to count - use kind as unique key since name can conflict (e.g., pods vs PodMetrics)
   const resourcesToCount = useMemo(() => {
@@ -1075,7 +1103,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                           key={resource.name}
                           resource={resource}
                           count={counts?.[resource.kind] ?? 0}
-                          isSelected={selectedKind.kind === resource.kind}
+                          isSelected={selectedKind.kind === resource.kind || selectedKind.name === resource.name}
                           onClick={() => {
                             setSelectedKind({ name: resource.name, kind: resource.kind, group: resource.group })
                             onKindChange?.()
@@ -1157,8 +1185,9 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-tertiary" />
             <input
+              ref={searchInputRef}
               type="text"
-              placeholder="Search resources..."
+              placeholder="Search... (/ or ⌘K)"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full max-w-md pl-10 pr-4 py-2 bg-theme-elevated border border-theme-border-light rounded-lg text-sm text-theme-text-primary placeholder-theme-text-disabled focus:outline-none focus:ring-2 focus:ring-blue-500"

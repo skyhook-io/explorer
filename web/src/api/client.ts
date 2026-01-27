@@ -34,6 +34,145 @@ async function fetchJSON<T>(path: string): Promise<T> {
   return response.json()
 }
 
+// ============================================================================
+// Dashboard
+// ============================================================================
+
+export interface DashboardCluster {
+  name: string
+  platform: string
+  version: string
+  connected: boolean
+}
+
+export interface DashboardHealth {
+  healthy: number
+  warning: number
+  error: number
+  warningEvents: number
+}
+
+export interface DashboardProblem {
+  kind: string
+  namespace: string
+  name: string
+  status: string
+  reason: string
+  message: string
+  age: string
+}
+
+export interface WorkloadCount {
+  total: number
+  ready: number
+  unready: number
+}
+
+export interface DashboardMetrics {
+  cpu?: MetricSummary
+  memory?: MetricSummary
+}
+
+export interface MetricSummary {
+  usageMillis: number
+  capacityMillis: number
+  usagePercent: number
+}
+
+export interface DashboardResourceCounts {
+  pods: { total: number; running: number; pending: number; failed: number; succeeded: number }
+  deployments: { total: number; available: number; unavailable: number }
+  statefulSets: WorkloadCount
+  daemonSets: WorkloadCount
+  services: number
+  ingresses: number
+  nodes: { total: number; ready: number; notReady: number }
+  namespaces: number
+  jobs: { total: number; active: number; succeeded: number; failed: number }
+  helmReleases: number
+}
+
+export interface DashboardEvent {
+  type: string
+  reason: string
+  message: string
+  involvedObject: string
+  namespace: string
+  timestamp: string
+}
+
+export interface DashboardChange {
+  kind: string
+  namespace: string
+  name: string
+  changeType: string
+  summary: string
+  timestamp: string
+}
+
+export interface DashboardTopologySummary {
+  nodeCount: number
+  edgeCount: number
+}
+
+export interface DashboardTopFlow {
+  src: string
+  dst: string
+  requestsPerSec?: number
+  connections: number
+}
+
+export interface DashboardTrafficSummary {
+  source: string
+  flowCount: number
+  topFlows: DashboardTopFlow[]
+}
+
+export interface DashboardHelmRelease {
+  name: string
+  namespace: string
+  chart: string
+  chartVersion: string
+  status: string
+  resourceHealth?: string
+}
+
+export interface DashboardHelmSummary {
+  total: number
+  releases: DashboardHelmRelease[]
+}
+
+export interface DashboardCRDCount {
+  kind: string
+  name: string
+  group: string
+  count: number
+}
+
+export interface DashboardResponse {
+  cluster: DashboardCluster
+  health: DashboardHealth
+  problems: DashboardProblem[]
+  resourceCounts: DashboardResourceCounts
+  recentEvents: DashboardEvent[]
+  recentChanges: DashboardChange[]
+  topologySummary: DashboardTopologySummary
+  trafficSummary: DashboardTrafficSummary | null
+  helmReleases: DashboardHelmSummary
+  metrics: DashboardMetrics | null
+  topCRDs: DashboardCRDCount[]
+}
+
+export function useDashboard(namespace?: string) {
+  const params = namespace ? `?namespace=${namespace}` : ''
+  return useQuery<DashboardResponse>({
+    queryKey: ['dashboard', namespace],
+    queryFn: () => fetchJSON(`/dashboard${params}`),
+    staleTime: 15000, // 15 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
+  })
+}
+
 // Cluster info
 export function useClusterInfo() {
   return useQuery<ClusterInfo>({
