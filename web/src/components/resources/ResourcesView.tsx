@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef, forwardRef } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import { useLocation } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import {
@@ -541,6 +542,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
 
   // Track if this is the initial mount to avoid re-syncing on first render
   const isInitialMount = useRef(true)
+  const isSyncingFromURL = useRef(false)
 
   // Ref to selected row for scrolling into view on deeplink
   const selectedRowRef = useRef<HTMLTableRowElement>(null)
@@ -572,6 +574,9 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
       return
     }
 
+    // Mark that we're syncing from URL to prevent URL write-back
+    isSyncingFromURL.current = true
+
     // Re-read URL params and update state
     const newKind = getInitialKindFromURL()
     const newFilters = getInitialFiltersFromURL()
@@ -591,6 +596,11 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     if (newFilters.search !== searchTerm) {
       setSearchTerm(newFilters.search)
     }
+
+    // Reset the flag after a tick to allow normal URL updates
+    requestAnimationFrame(() => {
+      isSyncingFromURL.current = false
+    })
   }, [location.search]) // Re-run when URL search params change
 
   // Update URL with all state
@@ -645,6 +655,10 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
 
   // Update URL when any filter changes
   useEffect(() => {
+    // Skip URL update if we're syncing FROM the URL (e.g., browser back button)
+    if (isSyncingFromURL.current) {
+      return
+    }
     // Skip URL update if selectedResource's kind doesn't match selectedKind (still syncing)
     if (selectedResource) {
       const resourceKindLower = selectedResource.kind.toLowerCase()
@@ -671,6 +685,11 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
   useEffect(() => {
     if (!selectedResource) return
 
+    // Clear owner filters when navigating to a specific resource
+    // (e.g., navigating from Deployment to Pod - the owner filter no longer applies)
+    setOwnerKind('')
+    setOwnerName('')
+
     // Check if the selected resource's kind matches current selectedKind
     const resourceKindLower = selectedResource.kind.toLowerCase()
     if (selectedKind.name.toLowerCase() === resourceKindLower) return
@@ -690,7 +709,8 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
         : resourceKindLower.charAt(0).toUpperCase() + resourceKindLower.slice(1)
       setSelectedKind({ name: resourceKindLower, kind: singular, group: '' })
     }
-  }, [selectedResource, selectedKind.name])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedResource])
 
   // Fetch API resources for dynamic sidebar
   const { data: apiResources } = useAPIResources()
@@ -756,8 +776,10 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
   const selectedQuery = resourceQueries[selectedQueryIndex]
   const resources = selectedQuery?.data
   const isLoading = selectedQuery?.isLoading ?? true
-  const refetch = selectedQuery?.refetch
+  const refetchFn = selectedQuery?.refetch
   const dataUpdatedAt = selectedQuery?.dataUpdatedAt
+
+  const [refetch, isRefreshAnimating] = useRefreshAnimation(() => refetchFn?.())
 
   // Track last updated time
   useEffect(() => {
@@ -957,6 +979,16 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     if (ownerKind && ownerName) {
       result = result.filter((r: any) => {
         const ownerRefs = r.metadata?.ownerReferences || []
+
+        // For Deployment ownership: Pods are owned by ReplicaSets, not Deployments directly.
+        // ReplicaSets created by Deployments are named "<deployment-name>-<hash>".
+        if (ownerKind === 'Deployment') {
+          return ownerRefs.some((ref: any) =>
+            ref.kind === 'ReplicaSet' && ref.name.startsWith(ownerName + '-')
+          )
+        }
+
+        // Direct owner match for other kinds (DaemonSet, StatefulSet, Job, etc.)
         return ownerRefs.some((ref: any) =>
           ref.kind === ownerKind && ref.name === ownerName
         )
@@ -1277,7 +1309,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
   }, [])
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full w-full">
       {/* Sidebar - Resource Types */}
       <div className="w-72 bg-theme-surface border-r border-theme-border overflow-y-auto shrink-0">
         <div className="flex items-center gap-2 px-3 py-3 border-b border-theme-border">
@@ -1634,11 +1666,12 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
             </div>
           )}
           <button
-            onClick={() => refetch()}
-            className="p-2 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded-lg"
+            onClick={refetch}
+            disabled={isRefreshAnimating}
+            className="p-2 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded-lg disabled:opacity-50"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={clsx('w-4 h-4', isRefreshAnimating && 'animate-spin')} />
           </button>
         </div>
 

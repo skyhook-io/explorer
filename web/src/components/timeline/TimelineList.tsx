@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import {
   AlertCircle,
   CheckCircle,
@@ -96,13 +97,14 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
   }, [])
 
   // Fetch unified timeline - always include all events, filter client-side
-  const { data: activity, isLoading, refetch } = useChanges({
+  const { data: activity, isLoading, refetch: refetchChanges } = useChanges({
     namespace: namespace || undefined,
     kind: kindFilter || undefined,
     timeRange,
     includeK8sEvents: true, // Always fetch all, filter client-side for stable counts
     limit: 500,
   })
+  const [handleRefresh, isRefreshAnimating] = useRefreshAnimation(refetchChanges)
 
   // Filter activity
   const filteredActivity = useMemo(() => {
@@ -381,11 +383,12 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
 
         {/* Refresh */}
         <button
-          onClick={() => refetch()}
-          className="p-2 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded-lg"
+          onClick={handleRefresh}
+          disabled={isRefreshAnimating}
+          className="p-2 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded-lg disabled:opacity-50"
           title="Refresh"
         >
-          <RefreshCw className="w-4 h-4" />
+          <RefreshCw className={clsx('w-4 h-4', isRefreshAnimating && 'animate-spin')} />
         </button>
       </div>
 

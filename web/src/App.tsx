@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useRefreshAnimation } from './hooks/useRefreshAnimation'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { HomeView } from './components/home/HomeView'
@@ -216,7 +217,7 @@ function AppInner() {
   const queryClient = useQueryClient()
 
   // SSE connection for real-time updates
-  const { topology, connected, reconnect } = useEventSource(namespace, topologyMode, {
+  const { topology, connected, reconnect: reconnectSSE } = useEventSource(namespace, topologyMode, {
     onContextSwitchComplete: endSwitch,
     onContextSwitchProgress: updateProgress,
     onContextChanged: () => {
@@ -227,6 +228,7 @@ function AppInner() {
       queryClient.invalidateQueries()
     },
   })
+  const [reconnect, isReconnecting] = useRefreshAnimation(reconnectSSE)
 
   // Handle node selection - convert TopologyNode to SelectedResource for the drawer
   const handleNodeClick = useCallback((node: TopologyNode) => {
@@ -399,10 +401,11 @@ function AppInner() {
               {!connected && (
                 <button
                   onClick={reconnect}
-                  className="p-1 text-theme-text-secondary hover:text-theme-text-primary"
+                  disabled={isReconnecting}
+                  className="p-1 text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
                   title="Reconnect"
                 >
-                  <RefreshCw className="w-3 h-3" />
+                  <RefreshCw className={`w-3 h-3 ${isReconnecting ? 'animate-spin' : ''}`} />
                 </button>
               )}
             </div>

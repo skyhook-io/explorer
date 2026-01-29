@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import { clsx } from 'clsx'
 import {
   ArrowLeft,
@@ -1260,10 +1261,11 @@ function PodLogsPanel({
   const [container, setContainer] = useState<string>('')
   const logsRef = useRef<HTMLPreElement>(null)
 
-  const { data: logsData, isLoading, refetch } = usePodLogs(namespace, podName, {
+  const { data: logsData, isLoading, refetch: refetchLogs } = usePodLogs(namespace, podName, {
     container: container || undefined,
     tailLines: 500,
   })
+  const [refetch, isRefreshAnimating] = useRefreshAnimation(refetchLogs)
 
   // Get container list from logs response
   const containers = logsData?.containers || []
@@ -1317,11 +1319,12 @@ function PodLogsPanel({
             {follow ? 'Following' : 'Follow'}
           </button>
           <button
-            onClick={() => refetch()}
-            className="p-1 text-theme-text-secondary hover:text-theme-text-primary"
+            onClick={refetch}
+            disabled={isRefreshAnimating}
+            className="p-1 text-theme-text-secondary hover:text-theme-text-primary disabled:opacity-50"
             title="Refresh"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={clsx('w-4 h-4', isRefreshAnimating && 'animate-spin')} />
           </button>
           {showHeader && (
             <button

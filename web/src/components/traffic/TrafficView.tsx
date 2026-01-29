@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import { useTrafficSources, useTrafficFlows, useTrafficConnect } from '../../api/traffic'
 import { useClusterInfo } from '../../api/client'
 import type { TrafficWizardState, AggregatedFlow } from '../../types'
@@ -353,12 +354,13 @@ export function TrafficView({ namespace }: TrafficViewProps) {
   const {
     data: flowsData,
     isLoading: flowsLoading,
-    refetch: refetchFlows,
+    refetch: refetchFlowsRaw,
   } = useTrafficFlows({
     namespace,
     since: timeRange,
     enabled: wizardState === 'ready',
   })
+  const [refetchFlows, isRefreshAnimating] = useRefreshAnimation(refetchFlowsRaw)
 
   // Filter flows based on user preferences
   // Note: namespace filtering is done server-side via the global namespace selector
@@ -876,18 +878,18 @@ export function TrafficView({ namespace }: TrafficViewProps) {
             </div>
 
             <button
-              onClick={() => refetchFlows()}
-              disabled={flowsLoading}
+              onClick={refetchFlows}
+              disabled={flowsLoading || isRefreshAnimating}
               className={clsx(
                 'p-1.5 rounded text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-hover transition-colors',
-                flowsLoading && 'opacity-50 cursor-not-allowed'
+                (flowsLoading || isRefreshAnimating) && 'opacity-50 cursor-not-allowed'
               )}
               title="Refresh traffic data"
             >
               {flowsLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className={clsx('h-4 w-4', isRefreshAnimating && 'animate-spin')} />
               )}
             </button>
           </div>

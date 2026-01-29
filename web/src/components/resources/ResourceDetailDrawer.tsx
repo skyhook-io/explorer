@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import {
   X,
   Copy,
@@ -112,12 +113,13 @@ export function ResourceDetailDrawer({ resource, onClose, onNavigate }: Resource
 
   const updateResource = useUpdateResource()
 
-  const { data: resourceData, relationships, isLoading, refetch, isRefetching } = useResource<any>(
+  const { data: resourceData, relationships, isLoading, refetch: refetchResource } = useResource<any>(
     resource.kind,
     resource.namespace,
     resource.name,
     resource.group
   )
+  const [refetch, isRefreshAnimating] = useRefreshAnimation(refetchResource)
 
   // Navigate to a related resource
   const handleNavigateToRelated = useCallback((ref: ResourceRef) => {
@@ -264,7 +266,7 @@ export function ResourceDetailDrawer({ resource, onClose, onNavigate }: Resource
         resourceData={resourceData}
         showYaml={showYaml}
         setShowYaml={setShowYaml}
-        isRefetching={isRefetching}
+        isRefetching={isRefreshAnimating}
         onRefetch={refetch}
         onClose={onClose}
         onCopy={(text) => copyToClipboard(text, 'name')}

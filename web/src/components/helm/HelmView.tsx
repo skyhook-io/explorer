@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import { Package, Search, RefreshCw, ArrowUpCircle, LayoutGrid, List } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useHelmReleases, useHelmBatchUpgradeInfo } from '../../api/client'
@@ -21,7 +22,8 @@ export function HelmView({ namespace, selectedRelease, onReleaseClick }: HelmVie
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedChart, setSelectedChart] = useState<{ repo: string; chart: string; version: string; source: ChartSource } | null>(null)
 
-  const { data: releases, isLoading, refetch } = useHelmReleases(namespace || undefined)
+  const { data: releases, isLoading, refetch: refetchReleases } = useHelmReleases(namespace || undefined)
+  const [handleRefresh, isRefreshAnimating] = useRefreshAnimation(refetchReleases)
 
   // Lazy load upgrade info after releases are loaded
   const { data: upgradeInfo, isLoading: upgradeLoading } = useHelmBatchUpgradeInfo(
@@ -51,7 +53,7 @@ export function HelmView({ namespace, selectedRelease, onReleaseClick }: HelmVie
   const handleInstallSuccess = (releaseNamespace: string, releaseName: string) => {
     setSelectedChart(null)
     setActiveTab('releases')
-    refetch()
+    refetchReleases()
     // Navigate to the new release
     onReleaseClick?.(releaseNamespace, releaseName)
   }
@@ -115,11 +117,12 @@ export function HelmView({ namespace, selectedRelease, onReleaseClick }: HelmVie
                 />
               </div>
               <button
-                onClick={() => refetch()}
-                className="p-2 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded-lg"
+                onClick={handleRefresh}
+                disabled={isRefreshAnimating}
+                className="p-2 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded-lg disabled:opacity-50"
                 title="Refresh"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className={clsx('w-4 h-4', isRefreshAnimating && 'animate-spin')} />
               </button>
             </div>
 

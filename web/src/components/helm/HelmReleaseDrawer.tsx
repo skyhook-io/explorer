@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { useRefreshAnimation } from '../../hooks/useRefreshAnimation'
 import { X, Copy, Check, RefreshCw, Package, Code, History, FileText, Settings, Link2, Anchor, GitFork, BookOpen, ArrowUpCircle, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useHelmRelease, useHelmManifest, useHelmValues, useHelmManifestDiff, useHelmUpgradeInfo, useHelmRollback, useHelmUninstall, useHelmUpgrade } from '../../api/client'
@@ -39,10 +40,11 @@ export function HelmReleaseDrawer({ release, onClose, onNavigateToResource }: He
   const resizeStartX = useRef(0)
   const resizeStartWidth = useRef(DEFAULT_WIDTH)
 
-  const { data: releaseDetail, isLoading, refetch, isRefetching } = useHelmRelease(
+  const { data: releaseDetail, isLoading, refetch: refetchRelease } = useHelmRelease(
     release.namespace,
     release.name
   )
+  const [refetch, isRefreshAnimating] = useRefreshAnimation(refetchRelease)
 
   // Fetch manifest for selected revision (or latest)
   const { data: manifest, isLoading: manifestLoading } = useHelmManifest(
@@ -249,12 +251,12 @@ export function HelmReleaseDrawer({ release, onClose, onNavigateToResource }: He
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => refetch()}
-              disabled={isRefetching}
+              onClick={refetch}
+              disabled={isRefreshAnimating}
               className="p-1.5 text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-elevated rounded disabled:opacity-50"
               title="Refresh"
             >
-              <RefreshCw className={clsx('w-4 h-4', isRefetching && 'animate-spin')} />
+              <RefreshCw className={clsx('w-4 h-4', isRefreshAnimating && 'animate-spin')} />
             </button>
             <button
               onClick={() => setShowUninstallConfirm(true)}
