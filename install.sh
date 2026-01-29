@@ -1,11 +1,11 @@
 #!/bin/bash
-# Skyhook Explorer installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/skyhook-io/explorer/main/install.sh | bash
+# Radar installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/skyhook-io/radar/main/install.sh | bash
 
 set -e
 
-REPO="skyhook-io/explorer"
-BINARY_NAME="kubectl-explorer"
+REPO="skyhook-io/radar"
+BINARY_NAME="kubectl-radar"
 INSTALL_DIR="/usr/local/bin"
 
 # Detect OS and architecture
@@ -34,10 +34,10 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
-echo "Installing Skyhook Explorer v${VERSION}..."
+echo "Installing Radar v${VERSION}..."
 
 # Download
-FILENAME="explorer_${VERSION}_${OS}_${ARCH}"
+FILENAME="radar_${VERSION}_${OS}_${ARCH}"
 if [ "$OS" = "windows" ]; then
   FILENAME="${FILENAME}.zip"
 else
@@ -70,10 +70,10 @@ fi
 rm -rf "$TMP_DIR"
 
 echo ""
-echo "Skyhook Explorer v${VERSION} installed successfully!"
+echo "Radar v${VERSION} installed successfully!"
 echo ""
 echo "Usage:"
-echo "  kubectl explore        # as kubectl plugin"
-echo "  kubectl-explorer        # standalone"
+echo "  kubectl radar          # as kubectl plugin"
+echo "  kubectl-radar          # standalone"
 echo ""
-echo "Run 'kubectl explore --help' for more options."
+echo "Run 'kubectl radar --help' for more options."

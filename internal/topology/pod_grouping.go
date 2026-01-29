@@ -6,7 +6,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
+	"github.com/skyhook-io/radar/internal/k8s"
 )
 
 // PodGroup represents a collection of pods grouped by app label or owner

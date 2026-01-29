@@ -14,12 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/helm"
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
-	"github.com/skyhook-io/skyhook-explorer/internal/server"
-	"github.com/skyhook-io/skyhook-explorer/internal/static"
-	"github.com/skyhook-io/skyhook-explorer/internal/timeline"
-	"github.com/skyhook-io/skyhook-explorer/internal/traffic"
+	"github.com/skyhook-io/radar/internal/helm"
+	"github.com/skyhook-io/radar/internal/k8s"
+	"github.com/skyhook-io/radar/internal/server"
+	"github.com/skyhook-io/radar/internal/static"
+	"github.com/skyhook-io/radar/internal/timeline"
+	"github.com/skyhook-io/radar/internal/traffic"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 )
@@ -40,14 +40,14 @@ func main() {
 	debugEvents := flag.Bool("debug-events", false, "Enable verbose event debugging (logs all event drops)")
 	// Timeline storage options
 	timelineStorage := flag.String("timeline-storage", "memory", "Timeline storage backend: memory or sqlite")
-	timelineDBPath := flag.String("timeline-db", "", "Path to timeline database file (default: ~/.skyhook-explorer/timeline.db)")
+	timelineDBPath := flag.String("timeline-db", "", "Path to timeline database file (default: ~/.radar/timeline.db)")
 	flag.Parse()
 
 	// Set debug mode for event tracking
 	k8s.DebugEvents = *debugEvents
 
 	if *showVersion {
-		fmt.Printf("skyhook-explorer %s\n", version)
+		fmt.Printf("radar %s\n", version)
 		os.Exit(0)
 	}
 
@@ -58,7 +58,7 @@ func main() {
 	_ = flag.Set("alsologtostderr", "false")
 	klog.SetOutput(os.Stderr)
 
-	log.Printf("Skyhook Explorer %s starting...", version)
+	log.Printf("Radar %s starting...", version)
 
 	// Initialize K8s client
 	err := k8s.Initialize(k8s.InitOptions{
@@ -90,7 +90,7 @@ func main() {
 		dbPath := *timelineDBPath
 		if dbPath == "" {
 			homeDir, _ := os.UserHomeDir()
-			dbPath = filepath.Join(homeDir, ".skyhook-explorer", "timeline.db")
+			dbPath = filepath.Join(homeDir, ".radar", "timeline.db")
 		}
 		timelineStoreCfg.Path = dbPath
 	}

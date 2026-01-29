@@ -20,7 +20,7 @@ import (
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
+	"github.com/skyhook-io/radar/internal/k8s"
 )
 
 // PortForwardSession represents an active port forward

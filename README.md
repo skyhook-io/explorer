@@ -1,19 +1,24 @@
-# Skyhook Explorer
+# Radar
 
-[![CI](https://github.com/skyhook-io/explorer/actions/workflows/ci.yml/badge.svg)](https://github.com/skyhook-io/explorer/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/skyhook-io/explorer?logo=github)](https://github.com/skyhook-io/explorer/releases/latest)
-[![Go Report Card](https://goreportcard.com/badge/github.com/skyhook-io/explorer)](https://goreportcard.com/report/github.com/skyhook-io/explorer)
-[![Downloads](https://img.shields.io/github/downloads/skyhook-io/explorer/total?logo=github)](https://github.com/skyhook-io/explorer/releases)
+**Modern Kubernetes visibility.**
+<br>Local-first. No account. No cloud dependency. Fast.
+
+Topology, event timeline, and service traffic — plus resource browsing and Helm management.
+
+[![CI](https://github.com/skyhook-io/radar/actions/workflows/ci.yml/badge.svg)](https://github.com/skyhook-io/radar/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/skyhook-io/radar?logo=github)](https://github.com/skyhook-io/radar/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/skyhook-io/radar)](https://goreportcard.com/report/github.com/skyhook-io/radar)
+[![Downloads](https://img.shields.io/github/downloads/skyhook-io/radar/total?logo=github)](https://github.com/skyhook-io/radar/releases)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 
-**A real-time Kubernetes dashboard that runs locally or in-cluster.** Visualize your cluster topology, browse resources, stream logs, exec into pods, manage Helm releases, and forward ports — all from a single binary with zero cluster-side installation.
+Visualize your cluster topology, browse resources, stream logs, exec into pods, manage Helm releases, and forward ports — all from a single binary with zero cluster-side installation.
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Skyhook Explorer Screenshot" width="800">
+  <img src="docs/screenshot.png" alt="Radar Screenshot" width="800">
 </p>
 
-## Why Explorer?
+## Why Radar?
 
 - **Zero install on your cluster** — runs on your laptop, talks to the K8s API directly
 - **Single binary** — no dependencies, no agents, no CRDs
@@ -28,34 +33,34 @@
 ### Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/skyhook-io/explorer/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/skyhook-io/radar/main/install.sh | bash
 ```
 
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install skyhook-io/tap/explorer
+brew install skyhook-io/tap/radar
 ```
 
 ### Direct Download
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/skyhook-io/explorer/releases):
+Download the latest release for your platform from [GitHub Releases](https://github.com/skyhook-io/radar/releases):
 
 | Platform | Architecture | Download |
 |----------|--------------|----------|
-| macOS | Apple Silicon (M1/M2/M3) | `explorer_*_darwin_arm64.tar.gz` |
-| macOS | Intel | `explorer_*_darwin_amd64.tar.gz` |
-| Linux | x86_64 | `explorer_*_linux_amd64.tar.gz` |
-| Linux | ARM64 | `explorer_*_linux_arm64.tar.gz` |
-| Windows | x86_64 | `explorer_*_windows_amd64.zip` |
+| macOS | Apple Silicon (M1/M2/M3) | `radar_*_darwin_arm64.tar.gz` |
+| macOS | Intel | `radar_*_darwin_amd64.tar.gz` |
+| Linux | x86_64 | `radar_*_linux_amd64.tar.gz` |
+| Linux | ARM64 | `radar_*_linux_arm64.tar.gz` |
+| Windows | x86_64 | `radar_*_windows_amd64.zip` |
 
 ### In-Cluster Deployment
 
-Deploy Explorer to your Kubernetes cluster for shared team access:
+Deploy Radar to your Kubernetes cluster for shared team access:
 
 ```bash
-helm install explorer ./deploy/helm/skyhook-explorer \
-  --namespace skyhook-explorer \
+helm install radar ./deploy/helm/radar \
+  --namespace radar \
   --create-namespace
 ```
 
@@ -67,22 +72,19 @@ See the [In-Cluster Deployment Guide](docs/in-cluster.md) for ingress, authentic
 
 ```bash
 # Opens browser automatically
-skyhook-explorer
-
-# Also works as a kubectl plugin
-kubectl explorer
+kubectl radar
 
 # Filter to a specific namespace
-skyhook-explorer --namespace production
+kubectl radar --namespace production
 
 # Custom port
-skyhook-explorer --port 8080
+kubectl radar --port 8080
 
 # Use a specific kubeconfig
-skyhook-explorer --kubeconfig /path/to/kubeconfig
+kubectl radar --kubeconfig /path/to/kubeconfig
 
 # Persist timeline events across restarts
-skyhook-explorer --timeline-storage sqlite
+kubectl radar --timeline-storage sqlite
 ```
 
 ### CLI Flags
@@ -94,7 +96,7 @@ skyhook-explorer --timeline-storage sqlite
 | `--port` | `9280` | Server port |
 | `--no-browser` | `false` | Don't auto-open browser |
 | `--timeline-storage` | `memory` | Timeline storage backend: `memory` or `sqlite` |
-| `--timeline-db` | `~/.skyhook-explorer/timeline.db` | Path to SQLite database (when using sqlite storage) |
+| `--timeline-db` | `~/.radar/timeline.db` | Path to SQLite database (when using sqlite storage) |
 | `--history-limit` | `10000` | Maximum events to retain in timeline |
 | `--debug-events` | `false` | Enable verbose event debugging (logs all event drops) |
 | `--version` | | Show version and exit |
@@ -208,8 +210,8 @@ See the **[Development Guide](DEVELOPMENT.md)** for building from source, archit
 
 Quick start:
 ```bash
-git clone https://github.com/skyhook-io/explorer.git
-cd explorer
+git clone https://github.com/skyhook-io/radar.git
+cd radar
 make deps
 
 # Terminal 1: Frontend with hot reload (port 9273)
@@ -230,3 +232,11 @@ Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md)
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE)
+
+---
+
+<p align="center">
+  <strong>Open source. Free forever.</strong>
+  <br>
+  <sub>Built by <a href="https://skyhook.io">Skyhook</a></sub>
+</p>

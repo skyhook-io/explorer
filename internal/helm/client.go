@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
+	"github.com/skyhook-io/radar/internal/k8s"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"

@@ -32,16 +32,16 @@ Include as much of the following information as possible:
 
 ### Local Execution (Default)
 
-When running Explorer locally on your machine:
+When running Radar locally on your machine:
 
-- **Uses your kubeconfig**: Explorer authenticates using your existing `~/.kube/config` credentials
+- **Uses your kubeconfig**: Radar authenticates using your existing `~/.kube/config` credentials
 - **Your permissions apply**: All operations are subject to your Kubernetes RBAC permissions
-- **No external communication**: Explorer only communicates with the Kubernetes API server specified in your kubeconfig
+- **No external communication**: Radar only communicates with the Kubernetes API server specified in your kubeconfig
 - **No persistent storage**: By default, no data persists between sessions (optional SQLite timeline storage is local-only)
 
 ### In-Cluster Deployment
 
-When deploying Explorer inside a Kubernetes cluster:
+When deploying Radar inside a Kubernetes cluster:
 
 - **ServiceAccount-based auth**: Uses the pod's ServiceAccount for Kubernetes API access
 - **RBAC-scoped permissions**: Configure the ServiceAccount with minimal required permissions
@@ -50,7 +50,7 @@ When deploying Explorer inside a Kubernetes cluster:
 
 ### Capabilities
 
-Explorer provides both read and write operations:
+Radar provides both read and write operations:
 
 **Read Operations:**
 - Browse all Kubernetes resources (Pods, Deployments, Services, etc.)
@@ -77,13 +77,13 @@ All write operations require appropriate RBAC permissions. If your kubeconfig or
 
 1. Use a kubeconfig with the minimum permissions you need
 2. Consider using read-only ServiceAccounts for browsing production clusters
-3. Don't expose the Explorer port to the network when running locally
-4. Keep Explorer updated to the latest version
+3. Don't expose the Radar port to the network when running locally
+4. Keep Radar updated to the latest version
 
 ### For In-Cluster Deployment
 
 1. Create a dedicated ServiceAccount with scoped RBAC permissions
 2. Use read-only ClusterRole bindings for view-only deployments
 3. Always deploy behind authentication (OAuth2 Proxy, Ingress auth, etc.)
-4. Use NetworkPolicies to restrict access to the Explorer pod
+4. Use NetworkPolicies to restrict access to the Radar pod
 5. Regularly audit ServiceAccount permissions

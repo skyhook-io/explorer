@@ -15,7 +15,7 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/timeline"
+	"github.com/skyhook-io/radar/internal/timeline"
 )
 
 // DynamicResourceCache provides on-demand caching for CRDs and other dynamic resources

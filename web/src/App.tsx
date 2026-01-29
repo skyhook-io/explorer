@@ -372,7 +372,7 @@ function AppInner() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
             <Logo />
-            <span className="text-xl text-theme-text-primary leading-none -translate-y-0.5" style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 520 }}>explorer</span>
+            <span className="text-xl text-theme-text-primary leading-none -translate-y-0.5" style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 520 }}>radar</span>
           </div>
 
           <div className="flex items-center gap-2">

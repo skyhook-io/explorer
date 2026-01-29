@@ -1,6 +1,6 @@
 apiVersion: v2
-name: skyhook-explorer
-description: A Kubernetes cluster visualization and management tool
+name: radar
+description: Modern Kubernetes visibility — topology, traffic, and Helm management
 type: application
 version: 0.1.0
 appVersion: "0.4.2"
@@ -10,9 +10,9 @@ keywords:
   - monitoring
   - kubectl
   - dashboard
-home: https://github.com/skyhook-io/explorer
+home: https://github.com/skyhook-io/radar
 sources:
-  - https://github.com/skyhook-io/explorer
+  - https://github.com/skyhook-io/radar
 maintainers:
   - name: Skyhook Team
     email: support@skyhook.io

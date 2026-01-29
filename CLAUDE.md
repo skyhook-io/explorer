@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-Skyhook Explorer is an open-source Kubernetes cluster visualization tool that provides real-time topology views, activity timeline monitoring, pod terminal access, log streaming, port forwarding, and Helm release management. It runs as a kubectl plugin (`kubectl-explorer`) or standalone binary and opens a web UI in the browser.
+Radar is a modern Kubernetes visibility tool — local-first, no account required, no cloud dependency, fast. It provides topology visualization, event timeline, service traffic maps, resource browsing, and Helm management. Runs as a kubectl plugin (`kubectl-radar`) or standalone binary and opens a web UI in the browser. Open source, free forever. Built by Skyhook.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ Skyhook Explorer is an open-source Kubernetes cluster visualization tool that pr
 │                         User's Machine                          │
 │                                                                 │
 │   ┌─────────────────┐                   ┌───────────────────┐  │
-│   │    Browser      │◄── HTTP/SSE/WS ──►│  Explorer Binary  │  │
+│   │    Browser      │◄── HTTP/SSE/WS ──►│  Radar Binary     │  │
 │   │  (React + UI)   │                   │  (Go + Embedded)  │  │
 │   └─────────────────┘                   └───────────────────┘  │
 │                                                  │              │
@@ -33,7 +33,7 @@ Skyhook Explorer is an open-source Kubernetes cluster visualization tool that pr
 ## Project Structure
 
 ```
-skyhook-explorer/
+radar/
 ├── cmd/explorer/              # CLI entry point (main.go)
 ├── internal/
 │   ├── helm/                  # Helm client integration
@@ -83,7 +83,7 @@ skyhook-explorer/
 ### Backend (Go)
 ```bash
 # Build binary
-go build -o explorer ./cmd/explorer
+go build -o radar ./cmd/explorer
 
 # Run in dev mode (serves frontend from filesystem, not embedded)
 go run ./cmd/explorer --dev
@@ -118,7 +118,7 @@ npm run tsc
 make build
 
 # Run the complete application
-./explorer
+./radar
 
 # Other Makefile targets
 make frontend       # Build frontend only
@@ -143,7 +143,7 @@ make docker         # Build Docker image
 --dev               Development mode (serve frontend from web/dist instead of embedded)
 --version           Show version and exit
 --timeline-storage  Timeline storage backend: memory or sqlite (default: memory)
---timeline-db       Path to timeline SQLite database (default: ~/.skyhook-explorer/timeline.db)
+--timeline-db       Path to timeline SQLite database (default: ~/.radar/timeline.db)
 --history-limit     Maximum number of events to retain in timeline (default: 10000)
 ```
 
