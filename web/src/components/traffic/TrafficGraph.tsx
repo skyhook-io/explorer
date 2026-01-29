@@ -261,7 +261,7 @@ function TrafficNode({ data }: { data: TrafficNodeData }) {
             <div key={portInfo.port} className="flex items-center justify-between gap-1 text-xs">
               <span className={clsx(
                 'font-mono',
-                (hasNamespaceColor || isAddonNode) ? 'text-cyan-300' : 'text-blue-600 dark:text-blue-400'
+                (hasNamespaceColor || isAddonNode) ? 'text-cyan-300' : 'text-blue-600 dark:text-blue-300'
               )}>
                 :{portInfo.port}
               </span>

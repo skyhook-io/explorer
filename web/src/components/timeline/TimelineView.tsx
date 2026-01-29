@@ -19,15 +19,21 @@ function topologyContentEqual(a: Topology | undefined, b: Topology | undefined):
   return aNodeIds === bNodeIds
 }
 
+import type { TimeRange } from '../../types'
+
+export type TimelineViewMode = 'list' | 'swimlane'
+export type { ActivityTypeFilter } from './TimelineList'
+
 interface TimelineViewProps {
   namespace: string
   onResourceClick?: (kind: string, namespace: string, name: string) => void
+  initialViewMode?: TimelineViewMode
+  initialFilter?: 'all' | 'changes' | 'k8s_events' | 'warnings' | 'unhealthy'
+  initialTimeRange?: TimeRange
 }
 
-export type TimelineViewMode = 'list' | 'swimlane'
-
-export function TimelineView({ namespace, onResourceClick }: TimelineViewProps) {
-  const [viewMode, setViewMode] = useState<TimelineViewMode>('swimlane')
+export function TimelineView({ namespace, onResourceClick, initialViewMode, initialFilter, initialTimeRange }: TimelineViewProps) {
+  const [viewMode, setViewMode] = useState<TimelineViewMode>(initialViewMode ?? 'swimlane')
 
   // Fetch all activity - zoom controls what's visible in the UI
   const { data: activity, isLoading } = useChanges({
@@ -75,6 +81,8 @@ export function TimelineView({ namespace, onResourceClick }: TimelineViewProps) 
       currentView={viewMode}
       onViewChange={setViewMode}
       onResourceClick={onResourceClick}
+      initialFilter={initialFilter}
+      initialTimeRange={initialTimeRange}
     />
   )
 }

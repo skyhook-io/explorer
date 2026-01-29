@@ -18,15 +18,32 @@ import { DiffViewer, DiffBadge } from './DiffViewer'
 import type { TimelineEvent, TimeRange } from '../../types'
 import { isChangeEvent, isK8sEvent, isHistoricalEvent, isOperation } from '../../types'
 import { getOperationColor, getHealthBadgeColor } from '../../utils/badge-colors'
+import { ResourceRefBadge } from '../resources/drawer-components'
+
+/** Format resource age (e.g., "3d", "5h", "10m") */
+function formatResourceAge(createdAt: string): string {
+  const diff = Date.now() - new Date(createdAt).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return '<1m'
+  if (mins < 60) return `${mins}m`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d`
+  const months = Math.floor(days / 30)
+  return `${months}mo`
+}
+
+export type ActivityTypeFilter = 'all' | 'changes' | 'k8s_events' | 'warnings' | 'unhealthy'
 
 interface TimelineListProps {
   namespace: string
   onViewChange?: (view: 'list' | 'swimlane') => void
   currentView?: 'list' | 'swimlane'
   onResourceClick?: (kind: string, namespace: string, name: string) => void
+  initialFilter?: ActivityTypeFilter
+  initialTimeRange?: TimeRange
 }
-
-type ActivityTypeFilter = 'all' | 'changes' | 'k8s_events' | 'warnings'
 
 const TIME_RANGES: { value: TimeRange; label: string }[] = [
   { value: '5m', label: '5 min' },
@@ -48,10 +65,10 @@ const RESOURCE_KINDS = [
   'StatefulSet',
 ]
 
-export function TimelineList({ namespace, onViewChange, currentView = 'list', onResourceClick }: TimelineListProps) {
+export function TimelineList({ namespace, onViewChange, currentView = 'list', onResourceClick, initialFilter, initialTimeRange }: TimelineListProps) {
   const [searchTerm, setSearchTerm] = useState('')
-  const [activityTypeFilter, setActivityTypeFilter] = useState<ActivityTypeFilter>('all')
-  const [timeRange, setTimeRange] = useState<TimeRange>('1h')
+  const [activityTypeFilter, setActivityTypeFilter] = useState<ActivityTypeFilter>(initialFilter ?? 'all')
+  const [timeRange, setTimeRange] = useState<TimeRange>(initialTimeRange ?? '1h')
   const [kindFilter, setKindFilter] = useState<string>('')
   const [expandedItem, setExpandedItem] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -78,12 +95,12 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
-  // Fetch unified timeline
+  // Fetch unified timeline - always include all events, filter client-side
   const { data: activity, isLoading, refetch } = useChanges({
     namespace: namespace || undefined,
     kind: kindFilter || undefined,
     timeRange,
-    includeK8sEvents: activityTypeFilter !== 'changes',
+    includeK8sEvents: true, // Always fetch all, filter client-side for stable counts
     limit: 500,
   })
 
@@ -96,10 +113,13 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
       if (activityTypeFilter === 'changes' && !isChangeEvent(item)) return false
       if (activityTypeFilter === 'k8s_events' && !isK8sEvent(item)) return false
       if (activityTypeFilter === 'warnings') {
-        // Warnings filter includes: K8s Warning events + unhealthy/degraded changes
-        const isWarning = item.eventType === 'Warning'
+        // Warnings filter: only K8s Warning events (matches home page count)
+        if (item.eventType !== 'Warning') return false
+      }
+      if (activityTypeFilter === 'unhealthy') {
+        // Unhealthy filter: only changes with unhealthy/degraded health state (no K8s events)
         const isUnhealthyChange = isChangeEvent(item) && (item.healthState === 'unhealthy' || item.healthState === 'degraded')
-        if (!isWarning && !isUnhealthyChange) return false
+        if (!isUnhealthyChange) return false
       }
 
       // Filter by search term
@@ -235,14 +255,12 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
 
   // Count stats
   const stats = useMemo(() => {
-    if (!activity) return { total: 0, changes: 0, warnings: 0 }
+    if (!activity) return { total: 0, changes: 0, warnings: 0, unhealthy: 0 }
     return {
       total: activity.length,
       changes: activity.filter((e) => isChangeEvent(e)).length,
-      warnings: activity.filter((e) =>
-        e.eventType === 'Warning' ||
-        (isChangeEvent(e) && (e.healthState === 'unhealthy' || e.healthState === 'degraded'))
-      ).length,
+      warnings: activity.filter((e) => e.eventType === 'Warning').length,
+      unhealthy: activity.filter((e) => isChangeEvent(e) && (e.healthState === 'unhealthy' || e.healthState === 'degraded')).length,
     }
   }, [activity])
 
@@ -270,6 +288,7 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
             onClick={() => setActivityTypeFilter('all')}
             icon={<Filter className="w-3 h-3" />}
             label="All"
+            tooltip="Show all activity: resource changes and K8s events"
           />
           <FilterButton
             active={activityTypeFilter === 'changes'}
@@ -278,20 +297,32 @@ export function TimelineList({ namespace, onViewChange, currentView = 'list', on
             label="Changes"
             count={stats.changes}
             color="blue"
+            tooltip="Resource mutations: creates, updates, deletes detected by watching K8s API"
           />
           <FilterButton
             active={activityTypeFilter === 'warnings'}
             onClick={() => setActivityTypeFilter('warnings')}
             icon={<AlertCircle className="w-3 h-3" />}
-            label="Warnings"
+            label="Warning Events"
             count={stats.warnings}
             color="amber"
+            tooltip="Native Kubernetes Warning events (e.g., ImagePullBackOff, FailedScheduling)"
+          />
+          <FilterButton
+            active={activityTypeFilter === 'unhealthy'}
+            onClick={() => setActivityTypeFilter('unhealthy')}
+            icon={<AlertCircle className="w-3 h-3" />}
+            label="Unhealthy"
+            count={stats.unhealthy}
+            color="red"
+            tooltip="Resource changes with unhealthy or degraded health state"
           />
           <FilterButton
             active={activityTypeFilter === 'k8s_events'}
             onClick={() => setActivityTypeFilter('k8s_events')}
             icon={<CheckCircle className="w-3 h-3" />}
             label="K8s Events"
+            tooltip="All native Kubernetes events (Normal + Warning types)"
           />
         </div>
 
@@ -429,19 +460,22 @@ interface FilterButtonProps {
   icon: React.ReactNode
   label: string
   count?: number
-  color?: 'blue' | 'amber' | 'green'
+  color?: 'blue' | 'amber' | 'green' | 'red'
+  tooltip?: string
 }
 
-function FilterButton({ active, onClick, icon, label, count, color }: FilterButtonProps) {
+function FilterButton({ active, onClick, icon, label, count, color, tooltip }: FilterButtonProps) {
   const colorClasses = {
     blue: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
     amber: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
     green: 'bg-green-500/20 text-green-700 dark:text-green-300',
+    red: 'bg-red-500/20 text-red-700 dark:text-red-300',
   }
 
   return (
     <button
       onClick={onClick}
+      title={tooltip}
       className={clsx(
         'px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-2',
         active ? (color ? colorClasses[color] : 'bg-theme-hover text-theme-text-primary') : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -475,6 +509,9 @@ function ActivityCard({ item, expanded, onToggle, onResourceClick }: ActivityCar
   const isHistorical = isHistoricalEvent(item)
   const isWarning = item.eventType === 'Warning'
   const time = formatTime(item.timestamp)
+
+  // Only expandable if there's a diff to show
+  const hasExpandableContent = isChange && !!item.diff
 
   // Determine card styling based on type
   const getCardStyle = () => {
@@ -517,8 +554,8 @@ function ActivityCard({ item, expanded, onToggle, onResourceClick }: ActivityCar
 
   return (
     <div
-      className={clsx('rounded-lg border transition-all cursor-pointer', getCardStyle())}
-      onClick={onToggle}
+      className={clsx('rounded-lg border transition-all', getCardStyle(), hasExpandableContent && 'cursor-pointer')}
+      onClick={hasExpandableContent ? onToggle : undefined}
     >
       <div className="p-3">
         {/* Header row */}
@@ -543,6 +580,20 @@ function ActivityCard({ item, expanded, onToggle, onResourceClick }: ActivityCar
                 <span className="text-sm font-medium text-theme-text-primary truncate group-hover:text-blue-300">{item.name}</span>
               </button>
               {item.namespace && <span className="text-xs text-theme-text-tertiary">in {item.namespace}</span>}
+              {item.owner && (
+                <span className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-xs text-theme-text-quaternary">←</span>
+                  <ResourceRefBadge
+                    resourceRef={{ kind: item.owner.kind, namespace: item.namespace, name: item.owner.name }}
+                    onClick={(ref) => onResourceClick?.(ref.kind, ref.namespace, ref.name)}
+                  />
+                </span>
+              )}
+              {item.createdAt && (
+                <span className="text-xs text-theme-text-quaternary" title={`Created: ${new Date(item.createdAt).toLocaleString()}`}>
+                  • {formatResourceAge(item.createdAt)} old
+                </span>
+              )}
             </div>
 
             {/* Activity details */}
@@ -559,8 +610,8 @@ function ActivityCard({ item, expanded, onToggle, onResourceClick }: ActivityCar
                     </span>
                   )}
                   {isHistorical && item.message && (
-                    <span className="text-sm text-theme-text-secondary truncate max-w-md">
-                      {item.message.length > 60 ? `${item.message.slice(0, 60)}...` : item.message}
+                    <span className="text-sm text-theme-text-secondary">
+                      {item.message}
                     </span>
                   )}
                 </>
@@ -570,9 +621,7 @@ function ActivityCard({ item, expanded, onToggle, onResourceClick }: ActivityCar
                     {item.reason}
                   </span>
                   <span className="text-sm text-theme-text-secondary">
-                    {item.message && item.message.length > 80 && !expanded
-                      ? `${item.message.slice(0, 80)}...`
-                      : item.message}
+                    {item.message}
                   </span>
                 </>
               )}
@@ -587,42 +636,19 @@ function ActivityCard({ item, expanded, onToggle, onResourceClick }: ActivityCar
             )}
           </div>
 
-          {/* Expand indicator */}
-          <ChevronRight
-            className={clsx('w-4 h-4 text-theme-text-disabled transition-transform shrink-0', expanded && 'rotate-90')}
-          />
+          {/* Expand indicator - only show if there's content to expand */}
+          {hasExpandableContent && (
+            <ChevronRight
+              className={clsx('w-4 h-4 text-theme-text-disabled transition-transform shrink-0', expanded && 'rotate-90')}
+            />
+          )}
         </div>
 
-        {/* Expanded details */}
-        {expanded && (
-          <div className="mt-3 pt-3 border-t-subtle space-y-3">
-            {/* Diff viewer for changes */}
-            {isChange && item.diff && (
-              <div>
-                <div className="text-xs text-theme-text-tertiary mb-2">Changes:</div>
-                <DiffViewer diff={item.diff} />
-              </div>
-            )}
-
-            {/* Full message for K8s events and historical events */}
-            {item.message && item.message.length > 60 && (
-              <div>
-                <div className="text-xs text-theme-text-tertiary mb-1">Full message:</div>
-                <p className="text-sm text-theme-text-secondary whitespace-pre-wrap">{item.message}</p>
-              </div>
-            )}
-
-            {/* Metadata */}
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <span className="text-theme-text-tertiary">Timestamp:</span>
-                <span className="ml-2 text-theme-text-secondary">{new Date(item.timestamp).toLocaleString()}</span>
-              </div>
-              <div>
-                <span className="text-theme-text-tertiary">Type:</span>
-                <span className="ml-2 text-theme-text-secondary">{isChange ? `Change (${item.eventType})` : item.eventType}</span>
-              </div>
-            </div>
+        {/* Expanded details - only for items with diffs */}
+        {expanded && hasExpandableContent && item.diff && (
+          <div className="mt-3 pt-3 border-t-subtle">
+            <div className="text-xs text-theme-text-tertiary mb-2">Changes:</div>
+            <DiffViewer diff={item.diff} />
           </div>
         )}
       </div>
@@ -728,7 +754,7 @@ function AggregatedActivityCard({ first, last, count, reason, expanded, onToggle
                 </div>
                 {first.message && (
                   <p className="text-xs text-theme-text-tertiary mt-1 whitespace-pre-wrap">
-                    {first.message.length > 150 ? `${first.message.slice(0, 150)}...` : first.message}
+                    {first.message}
                   </p>
                 )}
               </div>
@@ -744,7 +770,7 @@ function AggregatedActivityCard({ first, last, count, reason, expanded, onToggle
                 </div>
                 {last.message && (
                   <p className="text-xs text-theme-text-tertiary mt-1 whitespace-pre-wrap">
-                    {last.message.length > 150 ? `${last.message.slice(0, 150)}...` : last.message}
+                    {last.message}
                   </p>
                 )}
               </div>

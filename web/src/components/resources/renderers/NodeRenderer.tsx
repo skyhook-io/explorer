@@ -1,70 +1,18 @@
-import { Server, HardDrive, Globe, AlertTriangle, Tag } from 'lucide-react'
+import { Server, HardDrive, Globe, AlertTriangle, Tag, Activity } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Section, PropertyList, Property, ConditionsSection } from '../drawer-components'
+import { useNodeMetrics, useNodeMetricsHistory } from '../../../api/client'
+import { MetricsChart } from '../../ui/MetricsChart'
+import { formatMemoryString } from '../../../utils/format'
 
 interface NodeRendererProps {
   data: any
 }
 
-// Format Kubernetes memory values (e.g., "16384Ki" -> "16 GiB", "8Gi" -> "8 GiB")
+// Helper to handle undefined values
 function formatMemory(value: string | undefined): string {
   if (!value) return '-'
-
-  // Parse numeric portion and suffix
-  const match = value.match(/^(\d+(?:\.\d+)?)\s*([A-Za-z]*)$/)
-  if (!match) return value
-
-  const num = parseFloat(match[1])
-  const suffix = match[2]
-
-  // Convert to bytes first based on Kubernetes suffixes
-  let bytes: number
-  switch (suffix) {
-    // Binary suffixes (powers of 1024)
-    case 'Ki':
-      bytes = num * 1024
-      break
-    case 'Mi':
-      bytes = num * 1024 ** 2
-      break
-    case 'Gi':
-      bytes = num * 1024 ** 3
-      break
-    case 'Ti':
-      bytes = num * 1024 ** 4
-      break
-    // Decimal suffixes (powers of 1000)
-    case 'k':
-      bytes = num * 1000
-      break
-    case 'M':
-      bytes = num * 1000 ** 2
-      break
-    case 'G':
-      bytes = num * 1000 ** 3
-      break
-    case 'T':
-      bytes = num * 1000 ** 4
-      break
-    // Plain bytes
-    case '':
-      bytes = num
-      break
-    default:
-      return value
-  }
-
-  // Format to best human-readable binary unit
-  if (bytes >= 1024 ** 4) {
-    return `${(bytes / 1024 ** 4).toFixed(1)} TiB`
-  } else if (bytes >= 1024 ** 3) {
-    return `${(bytes / 1024 ** 3).toFixed(1)} GiB`
-  } else if (bytes >= 1024 ** 2) {
-    return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
-  } else if (bytes >= 1024) {
-    return `${(bytes / 1024).toFixed(1)} KiB`
-  }
-  return `${bytes} B`
+  return formatMemoryString(value)
 }
 
 // Format storage values the same way as memory
@@ -123,6 +71,11 @@ export function NodeRenderer({ data }: NodeRendererProps) {
   // Check for problems
   const problems = getNodeProblems(data)
   const hasProblems = problems.length > 0
+
+  // Fetch node metrics (current and historical)
+  const nodeName = metadata.name
+  const { data: metrics } = useNodeMetrics(nodeName)
+  const { data: metricsHistory } = useNodeMetricsHistory(nodeName)
 
   // Extract platform info from labels
   const instanceType = labels['node.kubernetes.io/instance-type']
@@ -196,6 +149,80 @@ export function NodeRenderer({ data }: NodeRendererProps) {
           </div>
         </div>
       </Section>
+
+      {/* Resource Usage (from metrics-server) */}
+      {(metrics?.usage || metricsHistory?.dataPoints?.length) && (
+        <Section title="Resource Usage" icon={Activity} defaultExpanded>
+          {metricsHistory?.dataPoints && metricsHistory.dataPoints.length > 0 ? (
+            <div className="space-y-4">
+              {/* CPU Usage with Chart */}
+              <div className="bg-theme-elevated/30 rounded-lg p-3">
+                <div className="text-xs text-theme-text-tertiary mb-1 flex items-center justify-between">
+                  <span>CPU</span>
+                  <span className="text-theme-text-quaternary">
+                    {allocatable.cpu || capacity.cpu || '?'} allocatable
+                  </span>
+                </div>
+                <MetricsChart
+                  dataPoints={metricsHistory.dataPoints}
+                  type="cpu"
+                  height={60}
+                  showAxis={true}
+                />
+              </div>
+
+              {/* Memory Usage with Chart */}
+              <div className="bg-theme-elevated/30 rounded-lg p-3">
+                <div className="text-xs text-theme-text-tertiary mb-1 flex items-center justify-between">
+                  <span>Memory</span>
+                  <span className="text-theme-text-quaternary">
+                    {formatMemory(allocatable.memory) || formatMemory(capacity.memory) || '?'} allocatable
+                  </span>
+                </div>
+                <MetricsChart
+                  dataPoints={metricsHistory.dataPoints}
+                  type="memory"
+                  height={60}
+                  showAxis={true}
+                />
+              </div>
+            </div>
+          ) : metrics?.usage ? (
+            /* Fallback to simple display if no history yet */
+            <div className="space-y-3">
+              <div className="bg-theme-elevated/30 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-theme-text-primary">CPU</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-medium text-blue-400">{metrics.usage.cpu}</span>
+                  <span className="text-sm text-theme-text-tertiary">
+                    / {allocatable.cpu || capacity.cpu || '?'} allocatable
+                  </span>
+                </div>
+              </div>
+              <div className="bg-theme-elevated/30 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-theme-text-primary">Memory</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-medium text-purple-400">{formatMemory(metrics.usage.memory)}</span>
+                  <span className="text-sm text-theme-text-tertiary">
+                    / {formatMemory(allocatable.memory) || formatMemory(capacity.memory) || '?'} allocatable
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-theme-text-tertiary">Collecting metrics data...</div>
+          )}
+          {metrics?.timestamp && (
+            <div className="mt-2 text-xs text-theme-text-tertiary">
+              Last updated: {new Date(metrics.timestamp).toLocaleTimeString()}
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* Addresses */}
       {addresses.length > 0 && (

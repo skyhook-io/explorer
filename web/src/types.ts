@@ -221,6 +221,7 @@ export interface SelectedResource {
   kind: string
   namespace: string
   name: string
+  group?: string  // API group for CRDs (e.g., 'metrics.k8s.io')
 }
 
 // Resource reference (for relationships)

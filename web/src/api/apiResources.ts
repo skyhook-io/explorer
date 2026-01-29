@@ -56,9 +56,16 @@ export const CORE_RESOURCES: APIResource[] = [
   { group: 'autoscaling', version: 'v2', kind: 'HorizontalPodAutoscaler', name: 'horizontalpodautoscalers', namespaced: true, isCrd: false, verbs: ['list', 'get', 'watch'] },
 ]
 
+// Resources that should be hidden from the sidebar
+// These are either internal or their data is shown elsewhere (e.g., metrics shown in Pod/Node views)
+const HIDDEN_KINDS = ['PodMetrics', 'NodeMetrics']
+
 export function categorizeResources(resources: APIResource[]): ResourceCategory[] {
   // Filter out non-listable resources (e.g., tokenreviews, subjectaccessreviews)
-  const listableResources = resources.filter(r => r.verbs?.includes('list'))
+  // Also filter out hidden resources like metrics (shown in Pod/Node views instead)
+  const listableResources = resources.filter(r =>
+    r.verbs?.includes('list') && !HIDDEN_KINDS.includes(r.kind)
+  )
 
   // Deduplicate by kind (not plural name) to handle cases like:
   // - Pod (core/v1, name: pods) vs PodMetrics (metrics.k8s.io, name: pods)
@@ -121,37 +128,76 @@ export function categorizeResources(resources: APIResource[]): ResourceCategory[
   }))
 }
 
-// Format API group name for display (e.g., "argoproj.io" -> "Argo")
-function formatGroupName(group: string): string {
-  // Common CRD groups with friendly names
+// Format API group name for display in sidebar categories (e.g., "argoproj.io" -> "Argo")
+// This is used where we want friendly category names
+export function formatGroupName(group: string): string {
   const knownGroups: Record<string, string> = {
     'argoproj.io': 'Argo',
     'cert-manager.io': 'Cert Manager',
+    'acme.cert-manager.io': 'Cert Manager',
     'istio.io': 'Istio',
-    'networking.istio.io': 'Istio Networking',
-    'security.istio.io': 'Istio Security',
-    'stable.example.com': 'Custom',
+    'networking.istio.io': 'Istio',
+    'security.istio.io': 'Istio',
+    'telemetry.istio.io': 'Istio',
     'monitoring.coreos.com': 'Prometheus',
     'velero.io': 'Velero',
     'external-secrets.io': 'External Secrets',
     'keda.sh': 'KEDA',
     'gateway.networking.k8s.io': 'Gateway API',
+    'traefik.io': 'Traefik',
     'traefik.containo.us': 'Traefik',
-    'custom': 'Custom Resources',
+    'pkg.crossplane.io': 'Crossplane',
+    'apiextensions.crossplane.io': 'Crossplane',
+    'source.toolkit.fluxcd.io': 'Flux',
+    'helm.toolkit.fluxcd.io': 'Flux',
+    'kustomize.toolkit.fluxcd.io': 'Flux',
+    'notification.toolkit.fluxcd.io': 'Flux',
+    'image.toolkit.fluxcd.io': 'Flux',
+    'serving.knative.dev': 'Knative',
+    'eventing.knative.dev': 'Knative',
+    'messaging.knative.dev': 'Knative',
+    'sources.knative.dev': 'Knative',
+    'kafka.strimzi.io': 'Strimzi',
+    'tekton.dev': 'Tekton',
+    'linkerd.io': 'Linkerd',
+    'policy.linkerd.io': 'Linkerd',
+    'cilium.io': 'Cilium',
+    'bitnami.com': 'Bitnami',
+    'elasticsearch.k8s.elastic.co': 'Elastic',
+    'kibana.k8s.elastic.co': 'Elastic',
+    'apm.k8s.elastic.co': 'Elastic',
+    'beat.k8s.elastic.co': 'Elastic',
+    'agent.k8s.elastic.co': 'Elastic',
+    'maps.k8s.elastic.co': 'Elastic',
+    'logstash.k8s.elastic.co': 'Elastic',
+    'jaegertracing.io': 'Jaeger',
+    'opentelemetry.io': 'OpenTelemetry',
+    'projectcalico.org': 'Calico',
+    'crd.projectcalico.org': 'Calico',
+    'projectcontour.io': 'Contour',
+    'ceph.rook.io': 'Rook',
+    'kyverno.io': 'Kyverno',
+    'k8s.nginx.org': 'NGINX',
+    'sparkoperator.k8s.io': 'Spark',
+    'kubeflow.org': 'Kubeflow',
+    'snapshot.storage.k8s.io': 'Snapshots',
   }
 
   if (knownGroups[group]) {
     return knownGroups[group]
   }
 
-  // Extract the first part of the domain and capitalize
-  const parts = group.split('.')
-  if (parts.length > 0) {
-    const name = parts[0]
-    return name.charAt(0).toUpperCase() + name.slice(1)
-  }
-
+  // Fallback: return the plain group name as-is
   return group
+}
+
+// Shorten group name for compact display (e.g., on cards)
+// Just shows the domain without TLD suffix
+export function shortenGroupName(group: string): string {
+  // Remove common TLD suffixes
+  return group
+    .replace(/\.(io|com|org|dev|sh)$/, '')
+    .replace(/\.k8s$/, '')  // e.g., elasticsearch.k8s.elastic.co -> elasticsearch.elastic
 }
 
 function sortResources(resources: APIResource[]): APIResource[] {

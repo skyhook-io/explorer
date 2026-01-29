@@ -458,6 +458,16 @@ const KNOWN_COLUMNS: Record<string, Column[]> = {
     { key: 'subjects', label: 'Subjects', width: 'w-20' },
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
+  events: [
+    { key: 'name', label: 'Name' },
+    { key: 'namespace', label: 'Namespace', width: 'w-36' },
+    { key: 'type', label: 'Type', width: 'w-20' },
+    { key: 'reason', label: 'Reason', width: 'w-28' },
+    { key: 'message', label: 'Message', width: 'w-64' },
+    { key: 'object', label: 'Object', width: 'w-48', hideOnMobile: true },
+    { key: 'count', label: 'Count', width: 'w-16' },
+    { key: 'lastSeen', label: 'Last Seen', width: 'w-24' },
+  ],
 }
 
 function getColumnsForKind(kind: string): Column[] {
@@ -467,7 +477,7 @@ function getColumnsForKind(kind: string): Column[] {
 interface ResourcesViewProps {
   namespace: string
   selectedResource?: SelectedResource | null
-  onResourceClick?: (kind: string, namespace: string, name: string) => void
+  onResourceClick?: (kind: string, namespace: string, name: string, group?: string) => void
   onKindChange?: () => void // Called when user changes resource type in sidebar
 }
 
@@ -534,6 +544,10 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
 
   // Ref to selected row for scrolling into view on deeplink
   const selectedRowRef = useRef<HTMLTableRowElement>(null)
+  // Ref to selected sidebar item for scrolling into view on deeplink
+  const selectedSidebarRef = useRef<HTMLButtonElement>(null)
+  // Track what resource we last scrolled to, to avoid re-scrolling on group expand
+  const lastScrolledResource = useRef<string | null>(null)
   // Ref to search input for keyboard shortcut
   const searchInputRef = useRef<HTMLInputElement>(null)
 
@@ -1023,18 +1037,50 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
     return result
   }, [resources, searchTerm, statusFilter, problemFilters, showInactiveReplicaSets, labelSelector, ownerKind, ownerName, selectedKind.name, sortColumn, sortDirection, getSortValue, podMatchesProblemFilter, getWorkloadHealthLevel])
 
-  // Scroll to selected row when entering from deeplink
+  // Scroll to selected row when selection changes (but not on group expand/filteredResources change)
   useEffect(() => {
-    if (selectedResource && selectedRowRef.current) {
-      // Use requestAnimationFrame to ensure DOM is ready
-      requestAnimationFrame(() => {
-        selectedRowRef.current?.scrollIntoView({
+    if (!selectedResource) {
+      lastScrolledResource.current = null
+      return
+    }
+
+    // Create a key for the current selection
+    const resourceKey = `${selectedResource.kind}/${selectedResource.namespace}/${selectedResource.name}`
+
+    // Only scroll if this is a new selection
+    if (lastScrolledResource.current === resourceKey) return
+    lastScrolledResource.current = resourceKey
+
+    // Small delay to allow DOM to update, then scroll
+    const timer = setTimeout(() => {
+      selectedRowRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [selectedResource]) // Only re-run when selection changes, NOT on filteredResources change
+
+  // Scroll sidebar to show selected kind when deep linking (but not on manual category expand)
+  const lastScrolledKind = useRef<string | null>(null)
+  useEffect(() => {
+    const kindKey = `${selectedKind.group}/${selectedKind.name}`
+
+    // Only scroll if the selected kind actually changed, not just category expansion
+    if (lastScrolledKind.current === kindKey) return
+    lastScrolledKind.current = kindKey
+
+    // Use requestAnimationFrame to ensure DOM is updated after category expansion
+    requestAnimationFrame(() => {
+      if (selectedSidebarRef.current) {
+        selectedSidebarRef.current.scrollIntoView({
           behavior: 'smooth',
           block: 'center',
         })
-      })
-    }
-  }, [selectedResource, filteredResources]) // Re-run when resources load
+      }
+    })
+  }, [selectedKind.name, selectedKind.group, expandedCategories]) // Re-run after category expansion
 
   // Calculate category totals, filter empty kinds/groups, and sort (empty categories at bottom)
   const { sortedCategories, hiddenKindsCount, hiddenGroupsCount } = useMemo(() => {
@@ -1282,18 +1328,24 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                   </button>
                   {isExpanded && (
                     <div className="space-y-0.5">
-                      {category.visibleResources.map((resource) => (
+                      {category.visibleResources.map((resource) => {
+                        const isResourceSelected =
+                          (selectedKind.name === resource.name && selectedKind.group === resource.group) ||
+                          (selectedKind.kind.toLowerCase() === resource.kind.toLowerCase() && selectedKind.group === resource.group)
+                        return (
                         <ResourceTypeButton
                           key={resource.name}
+                          ref={isResourceSelected ? selectedSidebarRef : null}
                           resource={resource}
                           count={counts?.[resource.kind] ?? 0}
-                          isSelected={selectedKind.kind === resource.kind || selectedKind.name === resource.name}
+                          isSelected={isResourceSelected}
                           onClick={() => {
                             setSelectedKind({ name: resource.name, kind: resource.kind, group: resource.group })
                             onKindChange?.()
                           }}
                         />
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>
@@ -1663,7 +1715,7 @@ export function ResourcesView({ namespace, selectedResource, onResourceClick, on
                       kind={selectedKind.name}
                       columns={columns}
                       isSelected={isSelected}
-                      onClick={() => onResourceClick?.(selectedKind.name, resource.metadata?.namespace, resource.metadata?.name)}
+                      onClick={() => onResourceClick?.(selectedKind.name, resource.metadata?.namespace || '', resource.metadata?.name, selectedKind.group)}
                     />
                   )
                 })}
@@ -1684,33 +1736,36 @@ interface ResourceTypeButtonProps {
   onClick: () => void
 }
 
-function ResourceTypeButton({ resource, count, isSelected, onClick }: ResourceTypeButtonProps) {
-  const Icon = getResourceIcon(resource.kind)
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        'w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-colors',
-        isSelected
-          ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
-          : 'text-theme-text-secondary hover:bg-theme-elevated hover:text-theme-text-primary'
-      )}
-    >
-      <Icon className="w-4 h-4 shrink-0" />
-      <Tooltip content={resource.kind} position="right">
-        <span className="flex-1 text-left truncate">
-          {resource.kind}
+const ResourceTypeButton = forwardRef<HTMLButtonElement, ResourceTypeButtonProps>(
+  function ResourceTypeButton({ resource, count, isSelected, onClick }, ref) {
+    const Icon = getResourceIcon(resource.kind)
+    return (
+      <button
+        ref={ref}
+        onClick={onClick}
+        className={clsx(
+          'w-full flex items-center gap-3 px-3 py-1.5 rounded-lg text-sm transition-colors',
+          isSelected
+            ? 'bg-blue-500/20 text-blue-700 dark:text-blue-300'
+            : 'text-theme-text-secondary hover:bg-theme-elevated hover:text-theme-text-primary'
+        )}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <Tooltip content={resource.kind} position="right">
+          <span className="flex-1 text-left truncate">
+            {resource.kind}
+          </span>
+        </Tooltip>
+        <span className={clsx(
+          'text-xs px-1.5 py-0.5 rounded min-w-[1.5rem] text-center',
+          isSelected ? 'bg-blue-500/30 text-blue-700 dark:text-blue-300' : 'bg-theme-elevated'
+        )}>
+          {count}
         </span>
-      </Tooltip>
-      <span className={clsx(
-        'text-xs px-1.5 py-0.5 rounded min-w-[1.5rem] text-center',
-        isSelected ? 'bg-blue-500/30 text-blue-700 dark:text-blue-300' : 'bg-theme-elevated'
-      )}>
-        {count}
-      </span>
-    </button>
-  )
-}
+      </button>
+    )
+  }
+)
 
 interface ResourceRowProps {
   resource: any
@@ -1845,6 +1900,8 @@ function CellContent({ resource, kind, column }: CellContentProps) {
     case 'rolebindings':
     case 'clusterrolebindings':
       return <RoleBindingCell resource={resource} column={column} />
+    case 'events':
+      return <EventCell resource={resource} column={column} />
     default:
       // Generic cell for CRDs and unknown resources
       return <GenericCell resource={resource} column={column} />
@@ -2811,6 +2868,72 @@ function RoleBindingCell({ resource, column }: { resource: any; column: string }
       return <span className="text-sm text-theme-text-secondary">{getRoleBindingRole(resource)}</span>
     case 'subjects':
       return <span className="text-sm text-theme-text-secondary">{getRoleBindingSubjectCount(resource)}</span>
+    default:
+      return <span className="text-sm text-theme-text-tertiary">-</span>
+  }
+}
+
+function EventCell({ resource, column }: { resource: any; column: string }) {
+  const eventType = resource.type || 'Normal'
+  const isWarning = eventType === 'Warning'
+
+  switch (column) {
+    case 'type':
+      return (
+        <span className={clsx(
+          'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+          isWarning ? 'bg-amber-500/20 text-amber-400' : 'bg-blue-500/20 text-blue-400'
+        )}>
+          {eventType}
+        </span>
+      )
+    case 'reason':
+      return (
+        <span className={clsx(
+          'text-sm font-medium',
+          isWarning ? 'text-amber-400' : 'text-theme-text-secondary'
+        )}>
+          {resource.reason || '-'}
+        </span>
+      )
+    case 'message': {
+      const message = resource.message || ''
+      return (
+        <Tooltip content={message}>
+          <span className="text-sm text-theme-text-secondary truncate block max-w-64">
+            {message || '-'}
+          </span>
+        </Tooltip>
+      )
+    }
+    case 'object': {
+      const obj = resource.involvedObject
+      if (!obj) return <span className="text-sm text-theme-text-tertiary">-</span>
+      const objRef = `${obj.kind}/${obj.name}`
+      return (
+        <Tooltip content={`${obj.kind}: ${obj.namespace ? obj.namespace + '/' : ''}${obj.name}`}>
+          <span className="text-sm text-theme-text-secondary truncate block">
+            {objRef}
+          </span>
+        </Tooltip>
+      )
+    }
+    case 'count': {
+      const count = resource.count || 1
+      return (
+        <span className={clsx(
+          'text-sm',
+          count > 1 ? 'text-amber-400 font-medium' : 'text-theme-text-secondary'
+        )}>
+          {count}
+        </span>
+      )
+    }
+    case 'lastSeen': {
+      const lastTimestamp = resource.lastTimestamp || resource.metadata?.creationTimestamp
+      if (!lastTimestamp) return <span className="text-sm text-theme-text-tertiary">-</span>
+      return <span className="text-sm text-theme-text-secondary">{formatAge(lastTimestamp)}</span>
+    }
     default:
       return <span className="text-sm text-theme-text-tertiary">-</span>
   }
