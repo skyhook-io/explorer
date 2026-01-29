@@ -78,6 +78,7 @@ import {
   ServiceAccountRenderer,
   RoleRenderer,
   RoleBindingRenderer,
+  EventRenderer,
   GenericRenderer,
 } from './renderers'
 import { useOpenTerminal, useOpenLogs } from '../dock'
@@ -114,7 +115,8 @@ export function ResourceDetailDrawer({ resource, onClose, onNavigate }: Resource
   const { data: resourceData, relationships, isLoading, refetch, isRefetching } = useResource<any>(
     resource.kind,
     resource.namespace,
-    resource.name
+    resource.name,
+    resource.group
   )
 
   // Navigate to a related resource
@@ -758,16 +760,16 @@ function YamlView({
         {editWarning && (
           <div className="px-4 py-2.5 bg-amber-500/10 dark:bg-yellow-500/10 border-b border-amber-300 dark:border-yellow-500/30">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-yellow-400 mt-0.5 shrink-0" />
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-yellow-300 mt-0.5 shrink-0" />
               <div className="text-xs">
                 <span className="font-medium text-amber-700 dark:text-yellow-300">{editWarning.message}</span>
-                <span className="text-amber-600 dark:text-yellow-400/80 ml-1">{editWarning.tip}</span>
+                <span className="text-amber-600 dark:text-yellow-300/80 ml-1">{editWarning.tip}</span>
                 {editWarning.learnMoreUrl && (
                   <a
                     href={editWarning.learnMoreUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="ml-1.5 text-blue-600 dark:text-blue-400 hover:underline"
+                    className="ml-1.5 text-blue-600 dark:text-blue-300 hover:underline"
                   >
                     Learn more →
                   </a>
@@ -781,8 +783,8 @@ function YamlView({
         {yamlErrors.length > 0 && (
           <div className="px-4 py-2 bg-red-500/10 border-b border-red-300 dark:border-red-500/30">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-              <div className="text-xs text-red-600 dark:text-red-400">
+              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-300 mt-0.5 shrink-0" />
+              <div className="text-xs text-red-600 dark:text-red-300">
                 {yamlErrors.map((err, i) => (
                   <div key={i}>{err}</div>
                 ))}
@@ -795,8 +797,8 @@ function YamlView({
         {formattedError && (
           <div className="px-4 py-2 bg-red-500/10 border-b border-red-300 dark:border-red-500/30">
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-              <div className="text-xs text-red-600 dark:text-red-400 flex-1">
+              <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-300 mt-0.5 shrink-0" />
+              <div className="text-xs text-red-600 dark:text-red-300 flex-1">
                 <div className="font-medium">Save failed</div>
                 <div className="mt-1">{formattedError.summary}</div>
                 {formattedError.details && (
@@ -895,7 +897,8 @@ function ResourceContent({ resource, data, relationships, onCopy, copied, onNavi
     'storageclasses', 'certificaterequests', 'clusterissuers',
     'gateways', 'httproutes', 'sealedsecrets', 'workflowtemplates',
     'networkpolicies', 'poddisruptionbudgets', 'serviceaccounts',
-    'roles', 'clusterroles', 'rolebindings', 'clusterrolebindings'
+    'roles', 'clusterroles', 'rolebindings', 'clusterrolebindings',
+    'events'
   ]
   const isKnownKind = knownKinds.includes(kind)
 
@@ -930,6 +933,7 @@ function ResourceContent({ resource, data, relationships, onCopy, copied, onNavi
       {kind === 'serviceaccounts' && <ServiceAccountRenderer data={data} />}
       {(kind === 'roles' || kind === 'clusterroles') && <RoleRenderer data={data} />}
       {(kind === 'rolebindings' || kind === 'clusterrolebindings') && <RoleBindingRenderer data={data} />}
+      {kind === 'events' && <EventRenderer data={data} onNavigate={onNavigate} />}
 
       {/* Generic renderer for CRDs and unknown resource types */}
       {!isKnownKind && <GenericRenderer data={data} />}
@@ -937,8 +941,8 @@ function ResourceContent({ resource, data, relationships, onCopy, copied, onNavi
       {/* Related Resources - clickable links to related items */}
       <RelatedResourcesSection relationships={relationships} onNavigate={onNavigate} />
 
-      {/* Related Events - valuable for debugging */}
-      <EventsSection events={events || []} isLoading={eventsLoading} />
+      {/* Related Events - valuable for debugging (skip for Event resources) */}
+      {kind !== 'events' && <EventsSection events={events || []} isLoading={eventsLoading} />}
 
       {/* Common sections */}
       <LabelsSection data={data} />

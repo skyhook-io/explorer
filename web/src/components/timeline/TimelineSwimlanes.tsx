@@ -488,7 +488,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
             {panOffset > 0 && (
               <button
                 onClick={() => setPanOffset(0)}
-                className="px-2 py-1 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-theme-elevated rounded"
+                className="px-2 py-1 text-xs text-blue-600 dark:text-blue-300 hover:text-blue-700 dark:hover:text-blue-200 hover:bg-theme-elevated rounded"
                 title="Jump to current time"
               >
                 → Now
@@ -518,7 +518,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
             <span className="w-px h-3 bg-theme-border-light mx-1" />
             <HealthBarLegendItem color="bg-green-500/60" label="healthy" description="Resource is fully operational" />
             <HealthBarLegendItem color="bg-blue-500/60" label="rolling" description="Expected degradation during deployment rollout" />
-            <HealthBarLegendItem color="bg-yellow-500/60" label="degraded" description="Unexpected partial availability" />
+            <HealthBarLegendItem color="bg-amber-500/60" label="degraded" description="Unexpected partial availability" />
             <HealthBarLegendItem color="bg-red-500/60" label="unhealthy" description="Resource is failing or not ready" />
           </div>
           <span className="text-xs text-theme-text-tertiary">
@@ -574,7 +574,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
           style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         >
           {/* Time axis header */}
-          <div className="sticky top-0 z-10 bg-theme-surface border-b border-theme-border">
+          <div className="sticky top-0 z-30 bg-theme-surface border-b border-theme-border">
             <div className="flex">
               <div className="w-80 shrink-0 border-r border-theme-border px-3 py-2">
                 <span className="text-xs font-medium text-theme-text-secondary">Resource</span>
@@ -676,7 +676,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
                           <div className="flex items-center gap-1">
                             <span className={clsx(
                               'text-xs px-1 py-0.5 rounded',
-                              lane.isWorkload ? 'bg-blue-500/15 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400' : 'bg-theme-elevated text-theme-text-secondary'
+                              lane.isWorkload ? 'bg-blue-500/15 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-theme-elevated text-theme-text-secondary'
                             )}>
                               {lane.kind}
                             </span>
@@ -692,7 +692,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
                               if (issueCount === 0) return null
                               return (
                                 <Tooltip content={`${issueCount} critical issue${issueCount > 1 ? 's' : ''} (OOMKilled, CrashLoopBackOff, etc.)`} position="top">
-                                  <span className="flex items-center gap-0.5 text-xs px-1 py-0.5 rounded bg-red-500/15 text-red-600 dark:text-red-400">
+                                  <span className="flex items-center gap-0.5 text-xs px-1 py-0.5 rounded bg-red-500/15 text-red-600 dark:text-red-300">
                                     <AlertTriangle className="w-3 h-3" />
                                     {issueCount}
                                   </span>
@@ -700,7 +700,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
                               )
                             })()}
                           </div>
-                          <div className="text-sm text-theme-text-primary break-words group-hover:text-blue-600 dark:group-hover:text-blue-300">
+                          <div className="text-sm text-theme-text-primary break-words group-hover:text-blue-600 dark:group-hover:text-blue-300 group-hover:underline cursor-pointer">
                             {lane.name}
                           </div>
                           <div className="text-xs text-theme-text-tertiary">{lane.namespace}</div>
@@ -750,11 +750,11 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
                             >
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-1">
-                                  <span className="text-xs px-1 py-0.5 rounded bg-blue-500/15 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400">
+                                  <span className="text-xs px-1 py-0.5 rounded bg-blue-500/15 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300">
                                     {lane.kind}
                                   </span>
                                 </div>
-                                <div className="text-sm text-theme-text-secondary break-words group-hover:text-blue-600 dark:group-hover:text-blue-300">
+                                <div className="text-sm text-theme-text-secondary break-words group-hover:text-blue-600 dark:group-hover:text-blue-300 group-hover:underline cursor-pointer">
                                   {lane.name}
                                 </div>
                               </div>
@@ -806,7 +806,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
                                     {child.kind}
                                   </span>
                                 </div>
-                                <div className="text-sm text-theme-text-secondary break-words group-hover:text-blue-600 dark:group-hover:text-blue-300">
+                                <div className="text-sm text-theme-text-secondary break-words group-hover:text-blue-600 dark:group-hover:text-blue-300 group-hover:underline cursor-pointer">
                                   {child.name}
                                 </div>
                               </div>
@@ -854,7 +854,7 @@ export function TimelineSwimlanes({ events, isLoading, onResourceClick, viewMode
 
       {/* Event detail panel */}
       {selectedEvent && (
-        <EventDetailPanel event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+        <EventDetailPanel event={selectedEvent} onClose={() => setSelectedEvent(null)} onResourceClick={onResourceClick} />
       )}
     </div>
   )
@@ -1145,56 +1145,66 @@ function EventMarker({ event, x, selected, onClick, dimmed, small }: EventMarker
   // Critical issues get larger markers with icons
   if (isCritical && IssueIcon && !small) {
     return (
-      <button
-        className={clsx(
-          'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full transition-all group flex items-center justify-center',
-          'w-5 h-5',
-          markerClasses,
-          selected ? 'ring-2 ring-white ring-offset-2 ring-offset-theme-base scale-125' : 'hover:scale-110',
-          'z-20 shadow-sm'
-        )}
-        style={{ left: `${x}%` }}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClick()
-        }}
+      <Tooltip
+        content={tooltipText}
+        position="top"
+        delay={100}
+        wrapperClassName="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20"
+        wrapperStyle={{ left: `${x}%` }}
       >
-        <IssueIcon className="w-3 h-3 text-white" />
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-theme-base text-theme-text-primary rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-75 shadow-lg border border-theme-border-light">
-          {tooltipText}
-        </span>
-      </button>
+        <button
+          className={clsx(
+            'rounded-full transition-all flex items-center justify-center',
+            'w-5 h-5',
+            markerClasses,
+            selected ? 'ring-2 ring-white ring-offset-2 ring-offset-theme-base scale-125' : 'hover:scale-110',
+            'shadow-sm'
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClick()
+          }}
+        >
+          <IssueIcon className="w-3 h-3 text-white" />
+        </button>
+      </Tooltip>
     )
   }
 
   return (
-    <button
-      className={clsx(
-        'absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full transition-all group',
-        small ? 'w-2.5 h-2.5' : 'w-3 h-3',
-        markerClasses,
-        selected ? 'ring-2 ring-white ring-offset-2 ring-offset-theme-base scale-150' : 'hover:scale-125',
+    <Tooltip
+      content={tooltipText}
+      position="top"
+      delay={100}
+      wrapperClassName={clsx(
+        'absolute top-1/2 -translate-y-1/2 -translate-x-1/2',
         dimmed ? 'z-5' : isHistorical ? 'z-5' : 'z-10'
       )}
-      style={{ left: `${x}%` }}
-      onClick={(e) => {
-        e.stopPropagation()
-        onClick()
-      }}
+      wrapperStyle={{ left: `${x}%` }}
     >
-      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-theme-base text-theme-text-primary rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none z-50 transition-opacity duration-75">
-        {tooltipText}
-      </span>
-    </button>
+      <button
+        className={clsx(
+          'rounded-full transition-all',
+          small ? 'w-2.5 h-2.5' : 'w-3 h-3',
+          markerClasses,
+          selected ? 'ring-2 ring-white ring-offset-2 ring-offset-theme-base scale-150' : 'hover:scale-125'
+        )}
+        onClick={(e) => {
+          e.stopPropagation()
+          onClick()
+        }}
+      />
+    </Tooltip>
   )
 }
 
 interface EventDetailPanelProps {
   event: TimelineEvent
   onClose: () => void
+  onResourceClick?: (kind: string, namespace: string, name: string) => void
 }
 
-function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
+function EventDetailPanel({ event, onClose, onResourceClick }: EventDetailPanelProps) {
   const isChange = isChangeEvent(event)
   const isHistorical = isHistoricalEvent(event)
   const isProblematic = isProblematicEvent(event)
@@ -1210,7 +1220,12 @@ function EventDetailPanel({ event, onClose }: EventDetailPanelProps) {
             <span className="text-xs px-1.5 py-0.5 bg-theme-elevated rounded text-theme-text-secondary">
               {event.kind}
             </span>
-            <span className="text-theme-text-primary font-medium">{event.name}</span>
+            <button
+              onClick={() => onResourceClick?.(event.kind, event.namespace, event.name)}
+              className="text-theme-text-primary font-medium hover:text-blue-600 dark:hover:text-blue-300 cursor-pointer"
+            >
+              {event.name}
+            </button>
             {event.namespace && (
               <span className="text-xs text-theme-text-tertiary">in {event.namespace}</span>
             )}

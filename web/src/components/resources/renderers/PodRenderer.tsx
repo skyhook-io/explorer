@@ -1,4 +1,4 @@
-import { Server, HardDrive, Terminal as TerminalIcon, FileText, AlertTriangle } from 'lucide-react'
+import { Server, HardDrive, Terminal as TerminalIcon, FileText, AlertTriangle, Activity } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Section, PropertyList, Property, ConditionsSection, CopyHandler } from '../drawer-components'
 import { formatResources } from '../resource-utils'
@@ -6,6 +6,8 @@ import { PortForwardInlineButton } from '../../portforward/PortForwardButton'
 import { useOpenTerminal, useOpenLogs } from '../../dock'
 import { Tooltip } from '../../ui/Tooltip'
 import { useCanExec, useCanViewLogs, useCanPortForward } from '../../../contexts/CapabilitiesContext'
+import { usePodMetrics, usePodMetricsHistory } from '../../../api/client'
+import { MetricsChart } from '../../ui/MetricsChart'
 
 interface PodRendererProps {
   data: any
@@ -92,6 +94,10 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
   const canExec = useCanExec()
   const canViewLogs = useCanViewLogs()
   const canPortForward = useCanPortForward()
+
+  // Fetch pod metrics (current and historical)
+  const { data: metrics } = usePodMetrics(namespace, podName)
+  const { data: metricsHistory } = usePodMetricsHistory(namespace, podName)
 
   // Check for problems
   const problems = getPodProblems(data)
@@ -300,6 +306,89 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
           })}
         </div>
       </Section>
+
+      {/* Resource Usage (from metrics-server) */}
+      {(metrics?.containers?.length || metricsHistory?.containers?.length) && (
+        <Section title="Resource Usage" icon={Activity} defaultExpanded>
+          <div className="space-y-4">
+            {(metricsHistory?.containers || metrics?.containers || []).map((historyContainer) => {
+              // Find current metrics for this container
+              const currentMetrics = metrics?.containers?.find(c => c.name === historyContainer.name)
+              // Find the container spec to compare against limits
+              const containerSpec = containers.find((c: any) => c.name === historyContainer.name)
+              const limits = containerSpec?.resources?.limits
+              const requests = containerSpec?.resources?.requests
+
+              // Get historical data points (from history or empty)
+              const dataPoints = 'dataPoints' in historyContainer ? historyContainer.dataPoints : []
+
+              return (
+                <div key={historyContainer.name} className="bg-theme-elevated/30 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-theme-text-primary">{historyContainer.name}</span>
+                  </div>
+
+                  {dataPoints && dataPoints.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <div className="text-xs text-theme-text-tertiary mb-2">CPU</div>
+                        <MetricsChart
+                          dataPoints={dataPoints}
+                          type="cpu"
+                          height={80}
+                          showAxis={true}
+                          limit={limits?.cpu}
+                          request={requests?.cpu}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-xs text-theme-text-tertiary mb-2">Memory</div>
+                        <MetricsChart
+                          dataPoints={dataPoints}
+                          type="memory"
+                          height={80}
+                          showAxis={true}
+                          limit={limits?.memory}
+                          request={requests?.memory}
+                        />
+                      </div>
+                    </div>
+                  ) : currentMetrics ? (
+                    /* Fallback to simple display if no history yet */
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <div className="text-theme-text-tertiary mb-1">CPU</div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-sm font-medium text-blue-400">{currentMetrics.usage.cpu}</span>
+                          {limits?.cpu && (
+                            <span className="text-theme-text-tertiary">/ {limits.cpu} limit</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-theme-text-tertiary mb-1">Memory</div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-sm font-medium text-purple-400">{currentMetrics.usage.memory}</span>
+                          {limits?.memory && (
+                            <span className="text-theme-text-tertiary">/ {limits.memory} limit</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-theme-text-tertiary">Collecting metrics data...</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {metrics?.timestamp && (
+            <div className="mt-2 text-xs text-theme-text-tertiary">
+              Last updated: {new Date(metrics.timestamp).toLocaleTimeString()}
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* Conditions */}
       <ConditionsSection conditions={data.status?.conditions} />

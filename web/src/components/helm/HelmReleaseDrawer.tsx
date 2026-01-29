@@ -235,14 +235,14 @@ export function HelmReleaseDrawer({ release, onClose, onNavigateToResource }: He
             ) : upgradeInfo?.updateAvailable ? (
               <button
                 onClick={() => setShowUpgradeConfirm(true)}
-                className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-500/30 transition-colors"
+                className="flex items-center gap-1 px-2 py-0.5 text-xs font-medium rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 hover:bg-amber-500/30 transition-colors"
                 title={`Click to upgrade: ${upgradeInfo.currentVersion} → ${upgradeInfo.latestVersion}${upgradeInfo.repositoryName ? ` (${upgradeInfo.repositoryName})` : ''}`}
               >
                 <ArrowUpCircle className="w-3 h-3" />
                 {upgradeInfo.latestVersion}
               </button>
             ) : upgradeInfo && !upgradeInfo.error ? (
-              <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-500/20 text-green-700 dark:text-green-400" title="Chart is up to date">
+              <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-500/20 text-green-700 dark:text-green-300" title="Chart is up to date">
                 latest
               </span>
             ) : null}

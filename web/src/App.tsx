@@ -131,7 +131,7 @@ function AppInner() {
   const mainView = getViewFromPath(location.pathname)
 
   // Set mainView by navigating to the path
-  const setMainView = useCallback((view: ExtendedMainView) => {
+  const setMainView = useCallback((view: ExtendedMainView, params?: Record<string, string>) => {
     const path = view === 'home' ? '/' : `/${view}`
 
     // Clean up view-specific params
@@ -146,6 +146,15 @@ function AppInner() {
     // Remove timeline-only params when leaving timeline
     if (view !== 'timeline') {
       newParams.delete('resource')
+      newParams.delete('view')
+      newParams.delete('filter')
+    }
+
+    // Add any new params
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        newParams.set(key, value)
+      }
     }
 
     navigate({ pathname: path, search: newParams.toString() })
@@ -646,8 +655,8 @@ function AppInner() {
           <ResourcesView
             namespace={namespace}
             selectedResource={selectedResource}
-            onResourceClick={(kind, ns, name) => {
-              setSelectedResource({ kind, namespace: ns, name })
+            onResourceClick={(kind, ns, name, group) => {
+              setSelectedResource({ kind, namespace: ns, name, group })
             }}
             onKindChange={() => setSelectedResource(null)}
           />
@@ -658,6 +667,9 @@ function AppInner() {
           <TimelineView
             namespace={namespace}
             onResourceClick={(kind, ns, name) => setDetailResource({ kind, namespace: ns, name })}
+            initialViewMode={(searchParams.get('view') as 'list' | 'swimlane') || undefined}
+            initialFilter={(searchParams.get('filter') as 'all' | 'changes' | 'k8s_events' | 'warnings' | 'unhealthy') || undefined}
+            initialTimeRange={(searchParams.get('time') as '5m' | '30m' | '1h' | '6h' | '24h' | 'all') || undefined}
           />
         )}
 

@@ -102,7 +102,7 @@ export function ActivitySummary({ namespace, topology, onNavigate }: ActivitySum
   return (
     <button
       onClick={onNavigate}
-      className="group flex flex-col h-[260px] rounded-lg border-[3px] border-blue-500/30 bg-theme-surface/50 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)] hover:border-blue-500/60 transition-all duration-200 text-left"
+      className="group flex flex-col h-[260px] rounded-lg border-[3px] border-blue-500/30 bg-theme-surface/50 hover:-translate-y-1 hover:shadow-[0_12px_24px_rgba(0,0,0,0.12)] hover:border-blue-500/60 transition-all duration-200 text-left cursor-pointer"
     >
       <div className="flex items-center justify-between px-4 py-2 border-b border-theme-border">
         <div className="flex items-center gap-2">
@@ -179,7 +179,7 @@ function MiniLane({ lane, startTime, now, spanMs }: {
         <span className={clsx(
           'text-[9px] leading-none px-1 py-0.5 rounded shrink-0',
           hasProblems
-            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+            ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
             : 'bg-theme-elevated text-theme-text-tertiary',
         )}>
           {kindLabel}

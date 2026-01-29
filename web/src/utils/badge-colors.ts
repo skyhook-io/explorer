@@ -4,102 +4,102 @@
 // Kind badge colors - for K8s resource type badges
 export const KIND_BADGE_COLORS: Record<string, string> = {
   // Workload controllers
-  Deployment: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400',
-  StatefulSet: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400',
-  DaemonSet: 'bg-teal-500/15 text-teal-700 dark:bg-teal-900/50 dark:text-teal-400',
-  ReplicaSet: 'bg-green-500/15 text-green-700 dark:bg-green-900/50 dark:text-green-400',
-  Pod: 'bg-lime-500/15 text-lime-700 dark:bg-lime-900/50 dark:text-lime-400',
+  Deployment: 'bg-emerald-500/15 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300',
+  StatefulSet: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
+  DaemonSet: 'bg-teal-500/15 text-teal-700 dark:bg-teal-900/50 dark:text-teal-300',
+  ReplicaSet: 'bg-green-500/15 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+  Pod: 'bg-lime-500/15 text-lime-700 dark:bg-lime-900/50 dark:text-lime-300',
 
   // Networking
-  Service: 'bg-blue-500/15 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400',
-  Ingress: 'bg-violet-500/15 text-violet-700 dark:bg-violet-900/50 dark:text-violet-400',
+  Service: 'bg-blue-500/15 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+  Ingress: 'bg-violet-500/15 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300',
 
   // Config
-  ConfigMap: 'bg-amber-500/15 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400',
-  Secret: 'bg-red-500/15 text-red-700 dark:bg-red-900/50 dark:text-red-400',
+  ConfigMap: 'bg-amber-500/15 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300',
+  Secret: 'bg-red-500/15 text-red-700 dark:bg-red-900/50 dark:text-red-300',
 
   // Jobs
-  Job: 'bg-purple-500/15 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400',
-  CronJob: 'bg-purple-500/15 text-purple-700 dark:bg-purple-900/50 dark:text-purple-400',
+  Job: 'bg-purple-500/15 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+  CronJob: 'bg-purple-500/15 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
 
   // Autoscaling & Storage
-  HPA: 'bg-pink-500/15 text-pink-700 dark:bg-pink-900/50 dark:text-pink-400',
-  HorizontalPodAutoscaler: 'bg-pink-500/15 text-pink-700 dark:bg-pink-900/50 dark:text-pink-400',
-  PVC: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400',
-  PersistentVolumeClaim: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400',
+  HPA: 'bg-pink-500/15 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300',
+  HorizontalPodAutoscaler: 'bg-pink-500/15 text-pink-700 dark:bg-pink-900/50 dark:text-pink-300',
+  PVC: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
+  PersistentVolumeClaim: 'bg-cyan-500/15 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-300',
 
   // Special
   HelmRelease: 'bg-purple-500/20 text-purple-700 dark:text-purple-300',
-  Event: 'bg-slate-500/15 text-slate-700 dark:bg-slate-900/50 dark:text-slate-400',
+  Event: 'bg-slate-500/15 text-slate-700 dark:bg-slate-900/50 dark:text-slate-300',
 }
 
 // Kind badge colors with border - for prominent badges in drawers/modals
 export const KIND_BADGE_BORDERED: Record<string, string> = {
   // Workload controllers
-  Deployment: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30',
-  StatefulSet: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30',
-  DaemonSet: 'bg-teal-500/20 text-teal-700 dark:text-teal-400 border border-teal-500/30',
-  ReplicaSet: 'bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30',
-  Pod: 'bg-lime-500/20 text-lime-700 dark:text-lime-400 border border-lime-500/30',
-  PodGroup: 'bg-lime-500/20 text-lime-700 dark:text-lime-400 border border-lime-500/30',
+  Deployment: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
+  StatefulSet: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30',
+  DaemonSet: 'bg-teal-500/20 text-teal-700 dark:text-teal-300 border border-teal-500/30',
+  ReplicaSet: 'bg-green-500/20 text-green-700 dark:text-green-300 border border-green-500/30',
+  Pod: 'bg-lime-500/20 text-lime-700 dark:text-lime-300 border border-lime-500/30',
+  PodGroup: 'bg-lime-500/20 text-lime-700 dark:text-lime-300 border border-lime-500/30',
 
   // Networking
-  Internet: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/30',
-  Service: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/30',
-  Ingress: 'bg-violet-500/20 text-violet-700 dark:text-violet-400 border border-violet-500/30',
+  Internet: 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30',
+  Service: 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30',
+  Ingress: 'bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-500/30',
 
   // Config
-  ConfigMap: 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30',
-  Secret: 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30',
+  ConfigMap: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30',
+  Secret: 'bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/30',
 
   // Jobs
-  Job: 'bg-purple-500/20 text-purple-700 dark:text-purple-400 border border-purple-500/30',
-  CronJob: 'bg-purple-500/20 text-purple-700 dark:text-purple-400 border border-purple-500/30',
+  Job: 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30',
+  CronJob: 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30',
 
   // Autoscaling & Storage
-  HPA: 'bg-pink-500/20 text-pink-700 dark:text-pink-400 border border-pink-500/30',
-  HorizontalPodAutoscaler: 'bg-pink-500/20 text-pink-700 dark:text-pink-400 border border-pink-500/30',
-  PVC: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30',
-  PersistentVolumeClaim: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-400 border border-cyan-500/30',
+  HPA: 'bg-pink-500/20 text-pink-700 dark:text-pink-300 border border-pink-500/30',
+  HorizontalPodAutoscaler: 'bg-pink-500/20 text-pink-700 dark:text-pink-300 border border-pink-500/30',
+  PVC: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30',
+  PersistentVolumeClaim: 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30',
 }
 
 // Event type colors - for K8s event types (Normal, Warning)
 export const EVENT_TYPE_COLORS: Record<string, string> = {
-  Warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
-  Normal: 'bg-green-500/20 text-green-700 dark:text-green-400',
+  Warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+  Normal: 'bg-green-500/20 text-green-700 dark:text-green-300',
 }
 
 // Operation colors - for change events (add, update, delete)
 export const OPERATION_COLORS: Record<string, string> = {
-  add: 'text-green-700 dark:text-green-400',
-  update: 'text-blue-700 dark:text-blue-400',
-  delete: 'text-red-700 dark:text-red-400',
+  add: 'text-green-700 dark:text-green-300',
+  update: 'text-blue-700 dark:text-blue-300',
+  delete: 'text-red-700 dark:text-red-300',
 }
 
 // Operation background colors - for badges with background
 export const OPERATION_BADGE_COLORS: Record<string, string> = {
-  add: 'bg-green-500/20 text-green-700 dark:text-green-400',
-  update: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
-  delete: 'bg-red-500/20 text-red-700 dark:text-red-400',
+  add: 'bg-green-500/20 text-green-700 dark:text-green-300',
+  update: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+  delete: 'bg-red-500/20 text-red-700 dark:text-red-300',
 }
 
 // Health badge colors - for health state indicators
 export const HEALTH_BADGE_COLORS: Record<string, string> = {
-  healthy: 'bg-green-500/20 text-green-700 dark:text-green-400',
-  degraded: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-  unhealthy: 'bg-red-500/20 text-red-700 dark:text-red-400',
+  healthy: 'bg-green-500/20 text-green-700 dark:text-green-300',
+  degraded: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+  unhealthy: 'bg-red-500/20 text-red-700 dark:text-red-300',
   unknown: 'bg-theme-hover/50 text-theme-text-secondary',
 }
 
 // Helm release status colors
 export const HELM_STATUS_COLORS: Record<string, string> = {
-  deployed: 'bg-green-500/20 text-green-700 dark:text-green-400',
+  deployed: 'bg-green-500/20 text-green-700 dark:text-green-300',
   superseded: 'bg-theme-hover/50 text-theme-text-secondary',
-  failed: 'bg-red-500/20 text-red-700 dark:text-red-400',
-  'pending-install': 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-  'pending-upgrade': 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-  'pending-rollback': 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
-  uninstalling: 'bg-orange-500/20 text-orange-700 dark:text-orange-400',
+  failed: 'bg-red-500/20 text-red-700 dark:text-red-300',
+  'pending-install': 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+  'pending-upgrade': 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+  'pending-rollback': 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300',
+  uninstalling: 'bg-orange-500/20 text-orange-700 dark:text-orange-300',
   uninstalled: 'bg-theme-hover/50 text-theme-text-secondary',
 }
 
@@ -112,19 +112,19 @@ export const DEFAULT_BADGE_COLOR = 'bg-theme-elevated text-theme-text-secondary'
 
 // Severity badge colors - with background (for badges, pills, tags)
 export const SEVERITY_BADGE = {
-  success: 'bg-green-500/20 text-green-700 dark:text-green-400',
-  warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
-  error: 'bg-red-500/20 text-red-700 dark:text-red-400',
-  info: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
+  success: 'bg-green-500/20 text-green-700 dark:text-green-300',
+  warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+  error: 'bg-red-500/20 text-red-700 dark:text-red-300',
+  info: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
   neutral: 'bg-theme-hover/50 text-theme-text-secondary',
 } as const
 
 // Severity text colors - without background (for inline text, icons)
 export const SEVERITY_TEXT = {
-  success: 'text-green-700 dark:text-green-400',
-  warning: 'text-amber-700 dark:text-amber-400',
-  error: 'text-red-700 dark:text-red-400',
-  info: 'text-blue-700 dark:text-blue-400',
+  success: 'text-green-700 dark:text-green-300',
+  warning: 'text-amber-700 dark:text-amber-300',
+  error: 'text-red-700 dark:text-red-300',
+  info: 'text-blue-700 dark:text-blue-300',
   neutral: 'text-theme-text-secondary',
 } as const
 
@@ -148,10 +148,10 @@ export const SEVERITY_BORDER = {
 
 // Combined severity styles - badge with border (for prominent indicators)
 export const SEVERITY_BADGE_BORDERED = {
-  success: 'bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30',
-  warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30',
-  error: 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30',
-  info: 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/30',
+  success: 'bg-green-500/20 text-green-700 dark:text-green-300 border border-green-500/30',
+  warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30',
+  error: 'bg-red-500/20 text-red-700 dark:text-red-300 border border-red-500/30',
+  info: 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30',
   neutral: 'bg-theme-hover/50 text-theme-text-secondary border border-theme-border',
 } as const
 

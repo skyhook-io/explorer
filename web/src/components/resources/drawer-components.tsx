@@ -210,23 +210,24 @@ export function PodTemplateSection({ template }: { template: any }) {
 
 export function getKindColor(kind: string): string {
   const k = kind.toLowerCase()
-  if (k.includes('pod')) return 'bg-lime-500/20 text-lime-400 border-lime-500/30'
-  if (k.includes('deployment')) return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-  if (k.includes('service')) return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-  if (k.includes('ingress')) return 'bg-violet-500/20 text-violet-400 border-violet-500/30'
-  if (k.includes('configmap')) return 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-  if (k.includes('secret')) return 'bg-red-500/20 text-red-400 border-red-500/30'
-  if (k.includes('daemonset')) return 'bg-teal-500/20 text-teal-400 border-teal-500/30'
-  if (k.includes('statefulset')) return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30'
-  if (k.includes('replicaset')) return 'bg-green-500/20 text-green-400 border-green-500/30'
-  if (k.includes('hpa') || k.includes('horizontalpodautoscaler')) return 'bg-pink-500/20 text-pink-400 border-pink-500/30'
-  if (k.includes('cronjob')) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-  if (k.includes('job')) return 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-  if (k.includes('node')) return 'bg-gray-500/20 text-gray-400 border-gray-500/30'
-  if (k.includes('namespace')) return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-  if (k.includes('persistentvolume')) return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-  // Default color for CRDs - use a distinctive purple/magenta color
-  return 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30'
+  // Use darker text for light mode contrast, brighter for dark mode
+  if (k.includes('pod')) return 'bg-lime-500/20 text-lime-700 dark:text-lime-300 border-lime-500/30'
+  if (k.includes('deployment')) return 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+  if (k.includes('service')) return 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30'
+  if (k.includes('ingress')) return 'bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/30'
+  if (k.includes('configmap')) return 'bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-500/30'
+  if (k.includes('secret')) return 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/30'
+  if (k.includes('daemonset')) return 'bg-teal-500/20 text-teal-700 dark:text-teal-300 border-teal-500/30'
+  if (k.includes('statefulset')) return 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border-cyan-500/30'
+  if (k.includes('replicaset')) return 'bg-green-500/20 text-green-700 dark:text-green-300 border-green-500/30'
+  if (k.includes('hpa') || k.includes('horizontalpodautoscaler')) return 'bg-pink-500/20 text-pink-700 dark:text-pink-300 border-pink-500/30'
+  if (k.includes('cronjob')) return 'bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/30'
+  if (k.includes('job')) return 'bg-orange-500/20 text-orange-700 dark:text-orange-300 border-orange-500/30'
+  if (k.includes('node')) return 'bg-gray-500/20 text-gray-700 dark:text-gray-300 border-gray-500/30'
+  if (k.includes('namespace')) return 'bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-500/30'
+  if (k.includes('persistentvolume')) return 'bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/30'
+  // Default color for CRDs
+  return 'bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-300 border-fuchsia-500/30'
 }
 
 export function formatKindName(kind: string): string {
@@ -350,12 +351,13 @@ function RelationshipGroup({ label, refs, onNavigate }: RelationshipGroupProps) 
   )
 }
 
-interface ResourceRefBadgeProps {
+export interface ResourceRefBadgeProps {
   resourceRef: ResourceRef
   onClick?: (ref: ResourceRef) => void
 }
 
-function ResourceRefBadge({ resourceRef, onClick }: ResourceRefBadgeProps) {
+/** Reusable chip/badge for showing a related resource with click-to-navigate */
+export function ResourceRefBadge({ resourceRef, onClick }: ResourceRefBadgeProps) {
   const kindClass = getKindColor(resourceRef.kind)
   const kindName = formatKindForRef(resourceRef.kind)
 
@@ -364,7 +366,7 @@ function ResourceRefBadge({ resourceRef, onClick }: ResourceRefBadgeProps) {
       <button
         onClick={() => onClick(resourceRef)}
         className={clsx(
-          'px-2 py-0.5 text-xs rounded border transition-colors hover:brightness-125',
+          'px-2 py-0.5 text-xs rounded border transition-colors hover:brightness-125 cursor-pointer',
           kindClass
         )}
         title={`${resourceRef.kind}: ${resourceRef.namespace}/${resourceRef.name}`}

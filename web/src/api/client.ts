@@ -60,6 +60,7 @@ export interface DashboardProblem {
   reason: string
   message: string
   age: string
+  ageSeconds: number
 }
 
 export interface WorkloadCount {
@@ -75,8 +76,10 @@ export interface DashboardMetrics {
 
 export interface MetricSummary {
   usageMillis: number
+  requestsMillis: number
   capacityMillis: number
   usagePercent: number
+  requestPercent: number
 }
 
 export interface DashboardResourceCounts {
@@ -89,6 +92,10 @@ export interface DashboardResourceCounts {
   nodes: { total: number; ready: number; notReady: number }
   namespaces: number
   jobs: { total: number; active: number; succeeded: number; failed: number }
+  cronJobs: { total: number; active: number; suspended: number }
+  configMaps: number
+  secrets: number
+  pvcs: { total: number; bound: number; pending: number; unbound: number }
   helmReleases: number
 }
 
@@ -215,11 +222,18 @@ export function useTopology(namespace: string, viewMode: string = 'resources') {
 }
 
 // Generic resource fetching - returns resource with relationships
-export function useResource<T>(kind: string, namespace: string, name: string) {
+// Uses '_' as placeholder for cluster-scoped resources (empty namespace)
+export function useResource<T>(kind: string, namespace: string, name: string, group?: string) {
+  // For cluster-scoped resources, use '_' as namespace placeholder
+  const ns = namespace || '_'
+  const params = new URLSearchParams()
+  if (group) params.set('group', group)
+  const queryString = params.toString()
+
   const query = useQuery<ResourceWithRelationships<T>>({
-    queryKey: ['resource', kind, namespace, name],
-    queryFn: () => fetchJSON(`/resources/${kind}/${namespace}/${name}`),
-    enabled: Boolean(kind && namespace && name),
+    queryKey: ['resource', kind, namespace, name, group],
+    queryFn: () => fetchJSON(`/resources/${kind}/${ns}/${name}${queryString ? `?${queryString}` : ''}`),
+    enabled: Boolean(kind && name),  // namespace can be empty for cluster-scoped resources
   })
 
   // Extract resource and relationships from the response
@@ -231,11 +245,16 @@ export function useResource<T>(kind: string, namespace: string, name: string) {
 }
 
 // Hook that returns full response with relationships explicitly
-export function useResourceWithRelationships<T>(kind: string, namespace: string, name: string) {
+export function useResourceWithRelationships<T>(kind: string, namespace: string, name: string, group?: string) {
+  const ns = namespace || '_'
+  const params = new URLSearchParams()
+  if (group) params.set('group', group)
+  const queryString = params.toString()
+
   return useQuery<ResourceWithRelationships<T>>({
-    queryKey: ['resource', kind, namespace, name],
-    queryFn: () => fetchJSON(`/resources/${kind}/${namespace}/${name}`),
-    enabled: Boolean(kind && namespace && name),
+    queryKey: ['resource', kind, namespace, name, group],
+    queryFn: () => fetchJSON(`/resources/${kind}/${ns}/${name}${queryString ? `?${queryString}` : ''}`),
+    enabled: Boolean(kind && name),
   })
 }
 
@@ -347,6 +366,116 @@ export function useResourceEvents(kind: string, namespace: string, name: string)
     refetchInterval: 15000, // Refresh every 15 seconds
   })
 }
+
+// ============================================================================
+// Metrics (from metrics.k8s.io)
+// ============================================================================
+
+export interface ContainerMetrics {
+  name: string
+  usage: {
+    cpu: string      // e.g., "10m" (millicores)
+    memory: string   // e.g., "128Mi"
+  }
+}
+
+export interface PodMetrics {
+  metadata: {
+    name: string
+    namespace: string
+    creationTimestamp: string
+  }
+  timestamp: string
+  window: string
+  containers: ContainerMetrics[]
+}
+
+export interface NodeMetrics {
+  metadata: {
+    name: string
+    creationTimestamp: string
+  }
+  timestamp: string
+  window: string
+  usage: {
+    cpu: string
+    memory: string
+  }
+}
+
+// Fetch metrics for a specific pod
+export function usePodMetrics(namespace: string, podName: string) {
+  return useQuery<PodMetrics>({
+    queryKey: ['pod-metrics', namespace, podName],
+    queryFn: () => fetchJSON(`/metrics/pods/${namespace}/${podName}`),
+    enabled: Boolean(namespace && podName),
+    staleTime: 15000, // Metrics are fresh for 15 seconds
+    refetchInterval: 30000, // Refresh every 30 seconds
+  })
+}
+
+// Fetch metrics for a specific node
+export function useNodeMetrics(nodeName: string) {
+  return useQuery<NodeMetrics>({
+    queryKey: ['node-metrics', nodeName],
+    queryFn: () => fetchJSON(`/metrics/nodes/${nodeName}`),
+    enabled: Boolean(nodeName),
+    staleTime: 15000,
+    refetchInterval: 30000,
+  })
+}
+
+// ============================================================================
+// Metrics History (local collection)
+// ============================================================================
+
+export interface MetricsDataPoint {
+  timestamp: string
+  cpu: number      // CPU in nanocores
+  memory: number   // Memory in bytes
+}
+
+export interface ContainerMetricsHistory {
+  name: string
+  dataPoints: MetricsDataPoint[]
+}
+
+export interface PodMetricsHistory {
+  namespace: string
+  name: string
+  containers: ContainerMetricsHistory[]
+}
+
+export interface NodeMetricsHistory {
+  name: string
+  dataPoints: MetricsDataPoint[]
+}
+
+// Fetch historical metrics for a pod (last ~1 hour)
+export function usePodMetricsHistory(namespace: string, podName: string) {
+  return useQuery<PodMetricsHistory>({
+    queryKey: ['pod-metrics-history', namespace, podName],
+    queryFn: () => fetchJSON(`/metrics/pods/${namespace}/${podName}/history`),
+    enabled: Boolean(namespace && podName),
+    staleTime: 25000, // Slightly less than poll interval
+    refetchInterval: 30000, // Match the backend poll interval
+  })
+}
+
+// Fetch historical metrics for a node (last ~1 hour)
+export function useNodeMetricsHistory(nodeName: string) {
+  return useQuery<NodeMetricsHistory>({
+    queryKey: ['node-metrics-history', nodeName],
+    queryFn: () => fetchJSON(`/metrics/nodes/${nodeName}/history`),
+    enabled: Boolean(nodeName),
+    staleTime: 25000,
+    refetchInterval: 30000,
+  })
+}
+
+// ============================================================================
+// Pod Logs
+// ============================================================================
 
 // Pod logs types
 export interface LogsResponse {

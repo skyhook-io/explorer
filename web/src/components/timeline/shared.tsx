@@ -131,7 +131,7 @@ export function HealthSpanLegend() {
         <span>Rolling</span>
       </span>
       <span className="flex items-center gap-1">
-        <span className="w-4 h-2 rounded-sm bg-yellow-500/60" />
+        <span className="w-4 h-2 rounded-sm bg-amber-500/60" />
         <span>Degraded</span>
       </span>
       <span className="flex items-center gap-1">
@@ -407,8 +407,8 @@ export function HealthSpan({ health, left, width, title, createdBefore }: Health
         // Blue/purple for expected degradation during rollout
         return 'bg-blue-500/60'
       case 'degraded':
-        // Yellow for unexpected degradation
-        return 'bg-yellow-500/60'
+        // Amber for unexpected degradation
+        return 'bg-amber-500/60'
       case 'unhealthy':
         return 'bg-red-500/60'
       default:
@@ -427,7 +427,7 @@ export function HealthSpan({ health, left, width, title, createdBefore }: Health
       title={title}
     >
       {createdBefore && left === 0 && (
-        <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[9px] text-theme-text-tertiary opacity-70 whitespace-nowrap pointer-events-none group-hover:opacity-100">
+        <span className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[9px] text-black/70 dark:text-black/60 whitespace-nowrap pointer-events-none group-hover:text-black/90 dark:group-hover:text-black/80">
           ← {formatCreatedBefore(createdBefore)}
         </span>
       )}

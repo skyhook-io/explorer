@@ -1,5 +1,7 @@
 // Utility functions for resource display in tables
 
+import { formatCPUString, formatMemoryString } from '../../utils/format'
+
 // ============================================================================
 // STATUS & HEALTH UTILITIES
 // ============================================================================
@@ -1254,7 +1256,11 @@ export function truncate(str: string, length: number): string {
 
 export function formatResources(resources: any): string {
   const parts: string[] = []
-  if (resources.cpu) parts.push(`CPU: ${resources.cpu}`)
-  if (resources.memory) parts.push(`Mem: ${resources.memory}`)
+  if (resources.cpu) {
+    parts.push(`CPU: ${formatCPUString(resources.cpu)}`)
+  }
+  if (resources.memory) {
+    parts.push(`Mem: ${formatMemoryString(resources.memory)}`)
+  }
   return parts.join(', ') || '-'
 }
