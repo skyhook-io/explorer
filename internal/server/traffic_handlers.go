@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/traffic"
+	"github.com/skyhook-io/radar/internal/traffic"
 )
 
 // handleGetTrafficSources returns available traffic sources and recommendations

@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "skyhook-explorer.fullname" . }}
+  name: {{ include "radar.fullname" . }}
   labels:
-    {{- include "skyhook-explorer.labels" . | nindent 4 }}
+    {{- include "radar.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "skyhook-explorer.selectorLabels" . | nindent 6 }}
+      {{- include "radar.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -16,13 +16,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "skyhook-explorer.selectorLabels" . | nindent 8 }}
+        {{- include "radar.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "skyhook-explorer.serviceAccountName" . }}
+      serviceAccountName: {{ include "radar.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -78,7 +78,7 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: {{ include "skyhook-explorer.fullname" . }}
+            claimName: {{ include "radar.fullname" . }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:

@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Skyhook Explorer
+# Multi-stage Dockerfile for Radar
 
 # Stage 1: Build frontend
 FROM node:20-alpine AS frontend-builder
@@ -40,19 +40,19 @@ ARG TARGETARCH=amd64
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -ldflags "-s -w -X main.version=${VERSION}" \
-    -o /explorer ./cmd/explorer
+    -o /radar ./cmd/explorer
 
 # Stage 3: Final minimal image
 FROM gcr.io/distroless/static-debian12:nonroot
 
 # Labels
-LABEL org.opencontainers.image.title="Skyhook Explorer"
-LABEL org.opencontainers.image.description="Kubernetes cluster visualization and management tool"
-LABEL org.opencontainers.image.source="https://github.com/skyhook-io/explorer"
+LABEL org.opencontainers.image.title="Radar"
+LABEL org.opencontainers.image.description="Modern Kubernetes visibility — topology, traffic, and Helm management"
+LABEL org.opencontainers.image.source="https://github.com/skyhook-io/radar"
 LABEL org.opencontainers.image.vendor="Skyhook"
 
 # Copy the binary
-COPY --from=backend-builder /explorer /explorer
+COPY --from=backend-builder /radar /radar
 
 # Expose port
 EXPOSE 9280
@@ -63,5 +63,5 @@ USER nonroot:nonroot
 # Health check compatible with K8s probes
 # Note: distroless doesn't have curl, K8s probes will be used instead
 
-ENTRYPOINT ["/explorer"]
+ENTRYPOINT ["/radar"]
 CMD ["--no-browser"]

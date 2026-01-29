@@ -1,6 +1,6 @@
-# Skyhook Explorer Helm Chart
+# Radar Helm Chart
 
-Deploy Skyhook Explorer to your Kubernetes cluster for web-based cluster visualization and management.
+Deploy Radar to your Kubernetes cluster for web-based cluster visualization and management.
 
 > **See also:** [In-Cluster Deployment Guide](../../../docs/in-cluster.md) for ingress and DNS setup.
 
@@ -14,26 +14,26 @@ Deploy Skyhook Explorer to your Kubernetes cluster for web-based cluster visuali
 ### Quick Start
 
 ```bash
-helm install explorer ./deploy/helm/skyhook-explorer \
-  --namespace skyhook-explorer \
+helm install radar ./deploy/helm/radar \
+  --namespace radar \
   --create-namespace
 ```
 
 Access via port-forward:
 ```bash
-kubectl port-forward svc/explorer-skyhook-explorer 9280:9280 -n skyhook-explorer
+kubectl port-forward svc/radar 9280:9280 -n radar
 open http://localhost:9280
 ```
 
 ### With Ingress
 
 ```bash
-helm install explorer ./deploy/helm/skyhook-explorer \
-  --namespace skyhook-explorer \
+helm install radar ./deploy/helm/radar \
+  --namespace radar \
   --create-namespace \
   --set ingress.enabled=true \
   --set ingress.className=nginx \
-  --set ingress.hosts[0].host=explorer.example.com \
+  --set ingress.hosts[0].host=radar.example.com \
   --set ingress.hosts[0].paths[0].path=/ \
   --set ingress.hosts[0].paths[0].pathType=Prefix
 ```
@@ -41,16 +41,16 @@ helm install explorer ./deploy/helm/skyhook-explorer \
 ### With TLS
 
 ```bash
-helm install explorer ./deploy/helm/skyhook-explorer \
-  --namespace skyhook-explorer \
+helm install radar ./deploy/helm/radar \
+  --namespace radar \
   --create-namespace \
   --set ingress.enabled=true \
   --set ingress.className=nginx \
-  --set ingress.hosts[0].host=explorer.example.com \
+  --set ingress.hosts[0].host=radar.example.com \
   --set ingress.hosts[0].paths[0].path=/ \
   --set ingress.hosts[0].paths[0].pathType=Prefix \
-  --set ingress.tls[0].secretName=explorer-tls \
-  --set ingress.tls[0].hosts[0]=explorer.example.com
+  --set ingress.tls[0].secretName=radar-tls \
+  --set ingress.tls[0].hosts[0]=radar.example.com
 ```
 
 ## Configuration
@@ -58,7 +58,7 @@ helm install explorer ./deploy/helm/skyhook-explorer \
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `replicaCount` | Number of replicas | `1` |
-| `image.repository` | Image repository | `ghcr.io/skyhook-io/explorer` |
+| `image.repository` | Image repository | `ghcr.io/skyhook-io/radar` |
 | `image.tag` | Image tag | Chart appVersion |
 | `service.type` | Service type | `ClusterIP` |
 | `service.port` | Service port | `9280` |
@@ -92,17 +92,17 @@ The chart creates a ClusterRole with read-only access to common Kubernetes resou
 | Port Forward | `rbac.portForward: true` | Port forwarding to pods |
 | Logs | `rbac.podLogs: true` | View pod logs (enabled by default) |
 
-Explorer uses its ServiceAccount permissions to access the Kubernetes API. The UI automatically detects which features are available based on RBAC and hides unavailable features.
+Radar uses its ServiceAccount permissions to access the Kubernetes API. The UI automatically detects which features are available based on RBAC and hides unavailable features.
 
 ## Upgrading
 
 ```bash
-helm upgrade explorer ./deploy/helm/skyhook-explorer -n skyhook-explorer
+helm upgrade radar ./deploy/helm/radar -n radar
 ```
 
 ## Uninstalling
 
 ```bash
-helm uninstall explorer -n skyhook-explorer
-kubectl delete namespace skyhook-explorer
+helm uninstall radar -n radar
+kubectl delete namespace radar
 ```

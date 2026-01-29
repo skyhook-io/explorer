@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
+	"github.com/skyhook-io/radar/internal/k8s"
 )
 
 // LogsResponse is the response for non-streaming logs

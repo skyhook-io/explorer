@@ -1,6 +1,6 @@
 # In-Cluster Deployment
 
-Deploy Skyhook Explorer to your Kubernetes cluster for shared team access.
+Deploy Radar to your Kubernetes cluster for shared team access.
 
 ## Quick Start
 
@@ -9,17 +9,17 @@ Deploy Skyhook Explorer to your Kubernetes cluster for shared team access.
 # helm repo add skyhook https://skyhook-io.github.io/helm-charts
 
 # For now, clone and install from source
-git clone https://github.com/skyhook-io/explorer.git
-cd explorer
+git clone https://github.com/skyhook-io/radar.git
+cd radar
 
-helm install explorer ./deploy/helm/skyhook-explorer \
-  --namespace skyhook-explorer \
+helm install radar ./deploy/helm/radar \
+  --namespace radar \
   --create-namespace
 ```
 
 Access via port-forward:
 ```bash
-kubectl port-forward svc/explorer-skyhook-explorer 9280:9280 -n skyhook-explorer
+kubectl port-forward svc/radar 9280:9280 -n radar
 open http://localhost:9280
 ```
 
@@ -33,15 +33,15 @@ ingress:
   enabled: true
   className: nginx
   hosts:
-    - host: explorer.your-domain.com
+    - host: radar.your-domain.com
       paths:
         - path: /
           pathType: Prefix
 ```
 
 ```bash
-helm upgrade --install explorer ./deploy/helm/skyhook-explorer \
-  -n skyhook-explorer -f values.yaml
+helm upgrade --install radar ./deploy/helm/radar \
+  -n radar -f values.yaml
 ```
 
 ### With Basic Authentication
@@ -54,9 +54,9 @@ helm upgrade --install explorer ./deploy/helm/skyhook-explorer \
    htpasswd -nb admin 'your-password' > auth
 
    # Create the secret
-   kubectl create secret generic explorer-basic-auth \
+   kubectl create secret generic radar-basic-auth \
      --from-file=auth \
-     -n skyhook-explorer
+     -n radar
 
    rm auth  # Clean up local file
    ```
@@ -69,10 +69,10 @@ helm upgrade --install explorer ./deploy/helm/skyhook-explorer \
      className: nginx
      annotations:
        nginx.ingress.kubernetes.io/auth-type: basic
-       nginx.ingress.kubernetes.io/auth-secret: explorer-basic-auth
-       nginx.ingress.kubernetes.io/auth-realm: "Skyhook Explorer"
+       nginx.ingress.kubernetes.io/auth-secret: radar-basic-auth
+       nginx.ingress.kubernetes.io/auth-realm: "Radar"
      hosts:
-       - host: explorer.your-domain.com
+       - host: radar.your-domain.com
          paths:
            - path: /
              pathType: Prefix
@@ -80,8 +80,8 @@ helm upgrade --install explorer ./deploy/helm/skyhook-explorer \
 
 3. **Deploy:**
    ```bash
-   helm upgrade --install explorer ./deploy/helm/skyhook-explorer \
-     -n skyhook-explorer -f values.yaml
+   helm upgrade --install radar ./deploy/helm/radar \
+     -n radar -f values.yaml
    ```
 
 ### With TLS (HTTPS)
@@ -96,34 +96,34 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: explorer.your-domain.com
+    - host: radar.your-domain.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: explorer-tls
+    - secretName: radar-tls
       hosts:
-        - explorer.your-domain.com
+        - radar.your-domain.com
 ```
 
 ## DNS Setup
 
 1. **Get your ingress IP:**
    ```bash
-   kubectl get ingress -n skyhook-explorer
+   kubectl get ingress -n radar
    ```
 
 2. **Create a DNS A record** pointing your domain to the ingress IP.
 
 **Multi-cluster naming convention:**
 ```
-explorer.<cluster-name>.<domain>
+radar.<cluster-name>.<domain>
 ```
-Example: `explorer.prod-us-east1.example.com`
+Example: `radar.prod-us-east1.example.com`
 
 ## RBAC
 
-Explorer uses its ServiceAccount to access the Kubernetes API. The Helm chart creates a ClusterRole with **read-only access** to common resources by default:
+Radar uses its ServiceAccount to access the Kubernetes API. The Helm chart creates a ClusterRole with **read-only access** to common resources by default:
 
 - Pods, Services, ConfigMaps, Events, Namespaces, Nodes, ServiceAccounts, Endpoints
 - Deployments, DaemonSets, StatefulSets, ReplicaSets
@@ -154,7 +154,7 @@ rbac:
 
 ## Security Considerations
 
-When deploying Explorer in-cluster:
+When deploying Radar in-cluster:
 
 1. **Authentication**: Always enable authentication when exposing via ingress. Use basic auth (shown above) or an auth proxy like oauth2-proxy.
 
@@ -162,15 +162,15 @@ When deploying Explorer in-cluster:
 
 3. **Privileged features**: Terminal (`podExec`) and port forwarding grant significant access. Only enable these in trusted environments or when using per-user authentication.
 
-4. **Network access**: Consider using NetworkPolicies to restrict which pods can reach Explorer.
+4. **Network access**: Consider using NetworkPolicies to restrict which pods can reach Radar.
 
 ## Configuration Reference
 
-See [Helm Chart README](../deploy/helm/skyhook-explorer/README.md) for all available values.
+See [Helm Chart README](../deploy/helm/radar/README.md) for all available values.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Container image | `ghcr.io/skyhook-io/explorer` |
+| `image.repository` | Container image | `ghcr.io/skyhook-io/radar` |
 | `image.tag` | Image tag | Chart appVersion |
 | `ingress.enabled` | Enable ingress | `false` |
 | `ingress.className` | Ingress class | `""` |
@@ -186,14 +186,14 @@ See [Helm Chart README](../deploy/helm/skyhook-explorer/README.md) for all avail
 ### Pod not starting
 
 ```bash
-kubectl logs -n skyhook-explorer -l app.kubernetes.io/name=skyhook-explorer
-kubectl describe pod -n skyhook-explorer -l app.kubernetes.io/name=skyhook-explorer
+kubectl logs -n radar -l app.kubernetes.io/name=radar
+kubectl describe pod -n radar -l app.kubernetes.io/name=radar
 ```
 
 ### Ingress not working
 
 ```bash
-kubectl get ingress -n skyhook-explorer -o yaml
+kubectl get ingress -n radar -o yaml
 kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
 ```
 
@@ -201,19 +201,19 @@ kubectl logs -n ingress-nginx -l app.kubernetes.io/name=ingress-nginx
 
 Verify the secret format:
 ```bash
-kubectl get secret explorer-basic-auth -n skyhook-explorer -o jsonpath='{.data.auth}' | base64 -d
+kubectl get secret radar-basic-auth -n radar -o jsonpath='{.data.auth}' | base64 -d
 # Should show: username:$apr1$...
 ```
 
 ## Upgrading
 
 ```bash
-helm upgrade explorer ./deploy/helm/skyhook-explorer -n skyhook-explorer -f values.yaml
+helm upgrade radar ./deploy/helm/radar -n radar -f values.yaml
 ```
 
 ## Uninstalling
 
 ```bash
-helm uninstall explorer -n skyhook-explorer
-kubectl delete namespace skyhook-explorer
+helm uninstall radar -n radar
+kubectl delete namespace radar
 ```

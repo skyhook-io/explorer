@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
+	"github.com/skyhook-io/radar/internal/k8s"
 )
 
 var upgrader = websocket.Upgrader{

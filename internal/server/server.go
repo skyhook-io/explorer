@@ -18,11 +18,11 @@ import (
 	"github.com/go-chi/cors"
 	"k8s.io/apimachinery/pkg/labels"
 
-	explorerErrors "github.com/skyhook-io/skyhook-explorer/internal/errors"
-	"github.com/skyhook-io/skyhook-explorer/internal/helm"
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
-	"github.com/skyhook-io/skyhook-explorer/internal/timeline"
-	"github.com/skyhook-io/skyhook-explorer/internal/topology"
+	explorerErrors "github.com/skyhook-io/radar/internal/errors"
+	"github.com/skyhook-io/radar/internal/helm"
+	"github.com/skyhook-io/radar/internal/k8s"
+	"github.com/skyhook-io/radar/internal/timeline"
+	"github.com/skyhook-io/radar/internal/topology"
 )
 
 // Server is the Explorer HTTP server

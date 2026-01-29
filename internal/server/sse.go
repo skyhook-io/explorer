@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skyhook-io/skyhook-explorer/internal/k8s"
-	"github.com/skyhook-io/skyhook-explorer/internal/topology"
+	"github.com/skyhook-io/radar/internal/k8s"
+	"github.com/skyhook-io/radar/internal/topology"
 )
 
 // MaxSSEClients limits the number of concurrent SSE connections to prevent resource exhaustion

@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-# Skyhook Explorer Release Script
+# Radar Release Script
 # Usage: ./scripts/release.sh [--binaries] [--docker] [--all]
 
-readonly REPO="https://github.com/skyhook-io/explorer"
-readonly DOCKER_REPO="ghcr.io/skyhook-io/explorer"
+readonly REPO="https://github.com/skyhook-io/radar"
+readonly DOCKER_REPO="ghcr.io/skyhook-io/radar"
 
 # Colors
 RED='\033[0;31m'
@@ -205,7 +205,7 @@ release_docker() {
 main() {
   echo ""
   echo "=========================================="
-  echo "  Skyhook Explorer Release"
+  echo "  Radar Release"
   echo "=========================================="
   echo ""
 

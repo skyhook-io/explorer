@@ -1,4 +1,4 @@
-module github.com/skyhook-io/skyhook-explorer
+module github.com/skyhook-io/radar
 
 go 1.25.0
 

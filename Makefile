@@ -3,24 +3,24 @@
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -X main.version=$(VERSION)
-DOCKER_REPO ?= ghcr.io/skyhook-io/explorer
+DOCKER_REPO ?= ghcr.io/skyhook-io/radar
 
 ## Build targets
 
 # Build the complete application (frontend + embedded binary)
 build: frontend embed backend
-	@echo "Build complete: ./explorer"
+	@echo "Build complete: ./radar"
 
 # Build and install to /usr/local/bin
 install: build
-	@echo "Installing to /usr/local/bin/kubectl-explorer..."
-	@cp explorer /usr/local/bin/kubectl-explorer || sudo cp explorer /usr/local/bin/kubectl-explorer
-	@echo "Installed! Run 'kubectl explore' or 'kubectl-explorer'"
+	@echo "Installing to /usr/local/bin/kubectl-radar..."
+	@cp radar /usr/local/bin/kubectl-radar || sudo cp radar /usr/local/bin/kubectl-radar
+	@echo "Installed! Run 'kubectl radar' or 'kubectl-radar'"
 
 # Build Go backend with embedded frontend
 backend:
 	@echo "Building Go backend..."
-	go build -ldflags "$(LDFLAGS)" -o explorer ./cmd/explorer
+	go build -ldflags "$(LDFLAGS)" -o radar ./cmd/explorer
 
 # Build frontend (auto-installs deps if needed)
 frontend:
@@ -39,14 +39,14 @@ embed:
 # Quick rebuild and restart
 restart: frontend embed backend kill
 	@sleep 1
-	./explorer --kubeconfig ~/.kube/config --no-browser &
+	./radar --kubeconfig ~/.kube/config --no-browser &
 	@sleep 4
 	@echo "Server running at http://localhost:9280"
 
 # Frontend-only rebuild and restart (faster - no Go recompile)
 restart-fe: frontend embed kill
 	@sleep 1
-	./explorer --kubeconfig ~/.kube/config --no-browser &
+	./radar --kubeconfig ~/.kube/config --no-browser &
 	@sleep 4
 	@echo "Server running at http://localhost:9280"
 
@@ -73,15 +73,15 @@ watch-backend:
 
 # Run built binary
 run:
-	./explorer --kubeconfig ~/.kube/config
+	./radar --kubeconfig ~/.kube/config
 
 # Run in dev mode (serve frontend from web/dist instead of embedded)
 run-dev:
-	./explorer --kubeconfig ~/.kube/config --dev
+	./radar --kubeconfig ~/.kube/config --dev
 
 ## Utility targets
 
-# Kill any running explorer process
+# Kill any running radar process
 kill:
 	@lsof -ti:9280 | xargs kill -9 2>/dev/null || true
 
@@ -98,7 +98,7 @@ install-tools:
 
 # Clean build artifacts
 clean:
-	rm -f explorer
+	rm -f radar
 	rm -rf web/dist
 	rm -f internal/static/dist/index.html
 	rm -rf internal/static/dist/assets
@@ -158,7 +158,7 @@ release:
 # ============================================================================
 
 help:
-	@echo "Skyhook Explorer - Kubernetes Topology Visualizer"
+	@echo "Radar - Kubernetes Cluster Visualization"
 	@echo ""
 	@echo "Development:"
 	@echo "  make build           - Build CLI binary (frontend + embedded)"

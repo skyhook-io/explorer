@@ -1,6 +1,6 @@
 # Development Guide
 
-Guide for developers contributing to Skyhook Explorer or building custom versions.
+Guide for developers contributing to Radar or building custom versions.
 
 ## Prerequisites
 
@@ -12,8 +12,8 @@ Guide for developers contributing to Skyhook Explorer or building custom version
 ## Quick Start
 
 ```bash
-git clone https://github.com/skyhook-io/explorer.git
-cd explorer
+git clone https://github.com/skyhook-io/radar.git
+cd radar
 
 # Install dependencies
 make deps
@@ -45,7 +45,7 @@ make docker           # Build Docker image
 ## Project Structure
 
 ```
-explorer/
+radar/
 ├── cmd/explorer/           # CLI entry point (main.go)
 ├── internal/
 │   ├── k8s/               # Kubernetes client, informers, caching
@@ -235,7 +235,7 @@ make release-docker       # Docker image → GHCR
 | Target | Command | Output |
 |--------|---------|--------|
 | CLI binaries | `make release-binaries` | GitHub Releases + Homebrew tap |
-| Docker | `make release-docker` | `ghcr.io/skyhook-io/explorer:VERSION` |
+| Docker | `make release-docker` | `ghcr.io/skyhook-io/radar:VERSION` |
 | All | `make release` | Interactive, choose targets |
 
 ### Prerequisites for Releasing
@@ -250,7 +250,7 @@ make release-docker       # Docker image → GHCR
 1. Ensure tests pass: `make test`
 2. Tag the release: `git tag v0.X.Y && git push origin v0.X.Y`
 3. Run release: `make release`
-4. Update Helm chart `appVersion` in `deploy/helm/skyhook-explorer/Chart.yaml`
+4. Update Helm chart `appVersion` in `deploy/helm/radar/Chart.yaml`
 
 ## Code Style
 

@@ -1,6 +1,6 @@
-# Contributing to Skyhook Explorer
+# Contributing to Radar
 
-Thank you for your interest in contributing to Skyhook Explorer! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to Radar! This document provides guidelines and instructions for contributing.
 
 ## Code of Conduct
 
@@ -49,8 +49,8 @@ Feature requests are welcome! Please include:
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/skyhook-explorer.git
-cd skyhook-explorer
+git clone https://github.com/YOUR_USERNAME/radar.git
+cd radar
 
 # Install frontend dependencies
 cd web
@@ -84,7 +84,7 @@ npm run tsc
 make build
 
 # Backend only
-go build -o explorer ./cmd/explorer
+go build -o radar ./cmd/explorer
 
 # Frontend only
 cd web

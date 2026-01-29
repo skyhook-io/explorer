@@ -1,4 +1,4 @@
-# GoReleaser configuration for Skyhook Explorer
+# GoReleaser configuration for Radar
 # Documentation: https://goreleaser.com
 
 version: 2
@@ -11,9 +11,9 @@ before:
     - sh -c "cp -r web/dist/* internal/static/dist/"
 
 builds:
-  - id: explorer
+  - id: radar
     main: ./cmd/explorer
-    binary: kubectl-explorer
+    binary: kubectl-radar
     env:
       - CGO_ENABLED=0
     goos:
@@ -63,58 +63,59 @@ changelog:
 release:
   github:
     owner: skyhook-io
-    name: explorer
+    name: radar
   draft: false
   prerelease: auto
   name_template: "v{{.Version}}"
   header: |
-    ## Skyhook Explorer v{{.Version}}
+    ## Radar v{{.Version}}
 
-    Kubernetes cluster visualization and topology explorer.
+    **Modern Kubernetes visibility.** Local-first. No account. No cloud dependency. Fast.
+
+    Topology, event timeline, and service traffic — plus resource browsing and Helm management. Open source. Free forever.
 
     ### Installation
 
     **Homebrew:**
     ```bash
-    brew tap skyhook-io/skyhook-cli
-    brew install skyhook-explorer
+    brew tap skyhook-io/tap
+    brew install radar
     ```
 
     **Manual (macOS Apple Silicon):**
     ```bash
-    curl -LO https://github.com/skyhook-io/explorer/releases/download/v{{.Version}}/explorer_{{.Version}}_darwin_arm64.tar.gz
-    tar -xzf explorer_{{.Version}}_darwin_arm64.tar.gz
-    sudo mv kubectl-explorer /usr/local/bin/
+    curl -LO https://github.com/skyhook-io/radar/releases/download/v{{.Version}}/radar_{{.Version}}_darwin_arm64.tar.gz
+    tar -xzf radar_{{.Version}}_darwin_arm64.tar.gz
+    sudo mv kubectl-radar /usr/local/bin/
     ```
 
     **Manual (macOS Intel):**
     ```bash
-    curl -LO https://github.com/skyhook-io/explorer/releases/download/v{{.Version}}/explorer_{{.Version}}_darwin_amd64.tar.gz
-    tar -xzf explorer_{{.Version}}_darwin_amd64.tar.gz
-    sudo mv kubectl-explorer /usr/local/bin/
+    curl -LO https://github.com/skyhook-io/radar/releases/download/v{{.Version}}/radar_{{.Version}}_darwin_amd64.tar.gz
+    tar -xzf radar_{{.Version}}_darwin_amd64.tar.gz
+    sudo mv kubectl-radar /usr/local/bin/
     ```
 
     **Manual (Linux amd64):**
     ```bash
-    curl -LO https://github.com/skyhook-io/explorer/releases/download/v{{.Version}}/explorer_{{.Version}}_linux_amd64.tar.gz
-    tar -xzf explorer_{{.Version}}_linux_amd64.tar.gz
-    sudo mv kubectl-explorer /usr/local/bin/
+    curl -LO https://github.com/skyhook-io/radar/releases/download/v{{.Version}}/radar_{{.Version}}_linux_amd64.tar.gz
+    tar -xzf radar_{{.Version}}_linux_amd64.tar.gz
+    sudo mv kubectl-radar /usr/local/bin/
     ```
 
-    Then run: `kubectl explorer` or `skyhook-explorer`
+    Then run: `kubectl radar`
 
-# Homebrew formula (publishes to skyhook-io/homebrew-skyhook-cli)
+# Homebrew formula (publishes to skyhook-io/homebrew-tap)
 brews:
-  - name: skyhook-explorer
+  - name: radar
     repository:
       owner: skyhook-io
-      name: homebrew-skyhook-cli
+      name: homebrew-tap
     directory: Formula
-    homepage: "https://github.com/skyhook-io/explorer"
-    description: "Kubernetes cluster visualization and topology explorer"
+    homepage: "https://github.com/skyhook-io/radar"
+    description: "Modern Kubernetes visibility — topology, traffic, and Helm management"
     license: "Apache-2.0"
     install: |
-      bin.install "kubectl-explorer"
-      bin.install_symlink "kubectl-explorer" => "skyhook-explorer"
+      bin.install "kubectl-radar"
     test: |
-      system "#{bin}/kubectl-explorer", "--version"
+      system "#{bin}/kubectl-radar", "--version"
