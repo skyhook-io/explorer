@@ -242,10 +242,37 @@ function getExternalServiceName(name: string, port?: number): { name: string; ag
 }
 
 
+// Cilium reserved identities (internal infrastructure traffic)
+const CILIUM_RESERVED_IDENTITIES = new Set([
+  'host',       // Node-level traffic
+  'health',     // Cilium health probes
+  'init',       // Initialization identity
+  'unmanaged',  // Unmanaged endpoints
+])
+
+// Check if an address is IPv6 link-local or multicast (infrastructure noise)
+function isIPv6Infrastructure(name: string): boolean {
+  // Link-local (fe80::/10)
+  if (name.toLowerCase().startsWith('fe80:')) return true
+  // Multicast (ff00::/8) - includes ff02::2 (all routers), ff02::1 (all nodes), etc.
+  if (name.toLowerCase().startsWith('ff0')) return true
+  return false
+}
+
 // Check if an endpoint is a system/infrastructure component
 function isSystemEndpoint(name: string, namespace: string | undefined, kind: string): boolean {
   // System namespaces
   if (namespace && SYSTEM_NAMESPACES.has(namespace)) {
+    return true
+  }
+
+  // Cilium reserved identities (show up as External kind with reserved names)
+  if (kind === 'External' && CILIUM_RESERVED_IDENTITIES.has(name)) {
+    return true
+  }
+
+  // IPv6 link-local and multicast addresses (infrastructure noise)
+  if (isIPv6Infrastructure(name)) {
     return true
   }
 
