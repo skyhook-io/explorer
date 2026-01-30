@@ -1,5 +1,5 @@
 .PHONY: build install clean dev frontend backend test lint help restart restart-fe kill watch-backend watch-frontend
-.PHONY: release release-binaries release-docker docker docker-multiarch docker-push
+.PHONY: release release-binaries-dry docker docker-multiarch docker-push
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -X main.version=$(VERSION)
@@ -147,21 +147,12 @@ docker-push:
 # Release Targets
 # ============================================================================
 
-# Full release: binaries + homebrew (via goreleaser)
-release-binaries:
-	@command -v goreleaser >/dev/null 2>&1 || { echo "Error: goreleaser not found. Install with: brew install goreleaser"; exit 1; }
-	goreleaser release --clean
-
-# Release binaries (dry run - no publish)
+# Dry run goreleaser (no publish)
 release-binaries-dry:
 	@command -v goreleaser >/dev/null 2>&1 || { echo "Error: goreleaser not found"; exit 1; }
 	goreleaser release --snapshot --clean
 
-# Release Docker image
-release-docker: docker docker-push
-	@echo "Docker image pushed: $(DOCKER_REPO):$(VERSION)"
-
-# Interactive release (prompts for version)
+# Interactive release (remote via CI or local)
 release:
 	@./scripts/release.sh
 
@@ -185,10 +176,8 @@ help:
 	@echo "  make docker-push      - Push to GHCR"
 	@echo ""
 	@echo "Release:"
-	@echo "  make release              - Interactive release (prompts for version)"
-	@echo "  make release-binaries     - Release CLI via goreleaser (GitHub + Homebrew)"
-	@echo "  make release-binaries-dry - Dry run (no publish)"
-	@echo "  make release-docker       - Build and push Docker image"
+	@echo "  make release              - Interactive release (remote via CI or local)"
+	@echo "  make release-binaries-dry - Dry run goreleaser (no publish)"
 	@echo ""
 	@echo "Utility:"
 	@echo "  make deps       - Install all dependencies"
