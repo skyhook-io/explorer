@@ -634,7 +634,7 @@ func computeLCS(a, b []string) []string {
 // extractHooks extracts hook information from a release
 func extractHooks(rel *release.Release) []HelmHook {
 	if rel.Hooks == nil {
-		return nil
+		return []HelmHook{}
 	}
 
 	hooks := make([]HelmHook, 0, len(rel.Hooks))
@@ -682,7 +682,7 @@ func extractReadme(rel *release.Release) string {
 // extractDependencies extracts chart dependencies
 func extractDependencies(rel *release.Release) []ChartDependency {
 	if rel.Chart == nil || rel.Chart.Metadata == nil || rel.Chart.Metadata.Dependencies == nil {
-		return nil
+		return []ChartDependency{}
 	}
 
 	deps := make([]ChartDependency, 0, len(rel.Chart.Metadata.Dependencies))

@@ -252,7 +252,7 @@ func (s *Server) getDashboardCluster(ctx context.Context) DashboardCluster {
 
 func (s *Server) getDashboardHealth(cache *k8s.ResourceCache, namespace string) (DashboardHealth, []DashboardProblem) {
 	health := DashboardHealth{}
-	var problems []DashboardProblem
+	problems := make([]DashboardProblem, 0)
 
 	now := time.Now()
 
@@ -804,7 +804,7 @@ func (s *Server) getDashboardRecentEvents(cache *k8s.ResourceCache, namespace st
 		events, err = cache.Events().List(labels.Everything())
 	}
 	if err != nil || len(events) == 0 {
-		return nil
+		return []DashboardEvent{}
 	}
 
 	// Filter to Warning events only and sort by last timestamp desc
@@ -855,7 +855,7 @@ func (s *Server) getDashboardRecentEvents(cache *k8s.ResourceCache, namespace st
 func (s *Server) getDashboardRecentChanges(ctx context.Context, namespace string) []DashboardChange {
 	store := timeline.GetStore()
 	if store == nil {
-		return nil
+		return []DashboardChange{}
 	}
 
 	opts := timeline.QueryOptions{
@@ -867,7 +867,7 @@ func (s *Server) getDashboardRecentChanges(ctx context.Context, namespace string
 
 	events, err := store.Query(ctx, opts)
 	if err != nil || len(events) == 0 {
-		return nil
+		return []DashboardChange{}
 	}
 
 	result := make([]DashboardChange, 0, len(events))
@@ -938,6 +938,7 @@ func (s *Server) getDashboardTrafficSummary(ctx context.Context, namespace strin
 		return &DashboardTrafficSummary{
 			Source:    sourceName,
 			FlowCount: 0,
+			TopFlows:  []DashboardTopFlow{},
 		}
 	}
 
@@ -980,12 +981,12 @@ func (s *Server) getDashboardTrafficSummary(ctx context.Context, namespace strin
 func (s *Server) getDashboardHelmSummary(namespace string) DashboardHelmSummary {
 	helmClient := helm.GetClient()
 	if helmClient == nil {
-		return DashboardHelmSummary{}
+		return DashboardHelmSummary{Releases: []DashboardHelmRelease{}}
 	}
 
 	releases, err := helmClient.ListReleases(namespace)
 	if err != nil {
-		return DashboardHelmSummary{}
+		return DashboardHelmSummary{Releases: []DashboardHelmRelease{}}
 	}
 
 	result := DashboardHelmSummary{
@@ -1221,12 +1222,12 @@ func truncate(s string, maxLen int) string {
 func (s *Server) getDashboardCRDCounts(reqCtx context.Context, namespace string) []DashboardCRDCount {
 	discovery := k8s.GetResourceDiscovery()
 	if discovery == nil {
-		return nil
+		return []DashboardCRDCount{}
 	}
 
 	resources, err := discovery.GetAPIResources()
 	if err != nil {
-		return nil
+		return []DashboardCRDCount{}
 	}
 
 	// Filter to CRDs only, deduplicating by Group+Kind (different versions of same CRD)
@@ -1242,12 +1243,12 @@ func (s *Server) getDashboardCRDCounts(reqCtx context.Context, namespace string)
 		}
 	}
 	if len(crds) == 0 {
-		return nil
+		return []DashboardCRDCount{}
 	}
 
 	dynamicCache := k8s.GetDynamicResourceCache()
 	if dynamicCache == nil {
-		return nil
+		return []DashboardCRDCount{}
 	}
 
 	ctx, cancel := context.WithTimeout(reqCtx, 3*time.Second)
@@ -1295,7 +1296,7 @@ func (s *Server) getDashboardCRDCounts(reqCtx context.Context, namespace string)
 	wg.Wait()
 
 	// Filter out zero-count and sort by count descending
-	var counts []DashboardCRDCount
+	counts := make([]DashboardCRDCount, 0)
 	for _, r := range results {
 		if r.count > 0 {
 			counts = append(counts, DashboardCRDCount{
