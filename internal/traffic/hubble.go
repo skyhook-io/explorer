@@ -2,6 +2,8 @@ package traffic
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"log"
@@ -12,6 +14,7 @@ import (
 	flowpb "github.com/cilium/cilium/api/v1/flow"
 	observerpb "github.com/cilium/cilium/api/v1/observer"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
@@ -20,9 +23,9 @@ import (
 )
 
 const (
-	hubbleRelayService   = "hubble-relay"
-	hubbleRelayNamespace = "kube-system"
-	hubbleRelayGRPCPort  = 80 // Hubble Relay gRPC port (mapped from 4245)
+	hubbleRelayService    = "hubble-relay"
+	hubbleRelayLabel      = "k8s-app=hubble-relay"
+	hubbleRelayCertSecret = "hubble-relay-client-certs"
 )
 
 // HubbleSource implements TrafficSource for Hubble/Cilium
@@ -32,7 +35,10 @@ type HubbleSource struct {
 	observerClient observerpb.ObserverClient
 	localPort      int    // Port-forward local port
 	currentContext string // K8s context for port-forward validation
+	relayNamespace string // Discovered namespace where hubble-relay lives
 	relayPort      int    // Hubble relay service port
+	useTLS         bool   // Whether TLS is required
+	tlsConfig      *tls.Config
 	isConnected    bool
 	mu             sync.RWMutex
 }
@@ -49,93 +55,142 @@ func (h *HubbleSource) Name() string {
 	return "hubble"
 }
 
-// Detect checks if Hubble is available in the cluster
+// Detect checks if Hubble is available in the cluster using label-based discovery
 func (h *HubbleSource) Detect(ctx context.Context) (*DetectionResult, error) {
 	result := &DetectionResult{
 		Available: false,
 	}
 
-	// Step 1: Check for Cilium ConfigMap (indicates Cilium is installed)
-	ciliumConfig, err := h.k8sClient.CoreV1().ConfigMaps(hubbleRelayNamespace).Get(ctx, "cilium-config", metav1.GetOptions{})
-	hasCilium := err == nil
-
-	// Check if Hubble is enabled in Cilium config
-	hubbleEnabled := false
-	if hasCilium && ciliumConfig.Data != nil {
-		hubbleEnabled = ciliumConfig.Data["enable-hubble"] == "true"
+	// Step 1: Find hubble-relay pods by label across ALL namespaces
+	relayPods, err := h.k8sClient.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		LabelSelector: hubbleRelayLabel,
+	})
+	if err != nil {
+		return result, fmt.Errorf("failed to search for hubble-relay pods: %w", err)
 	}
 
-	// Step 2: Check for Hubble Relay pods
-	relayPods, err := h.k8sClient.CoreV1().Pods(hubbleRelayNamespace).List(ctx, metav1.ListOptions{
-		LabelSelector: "k8s-app=hubble-relay",
-	})
-	hasRelayPods := err == nil && len(relayPods.Items) > 0
+	if len(relayPods.Items) == 0 {
+		result.Message = "Hubble Relay not found. Install Cilium with Hubble enabled for traffic visibility."
+		return result, nil
+	}
 
-	// Count running pods
+	// Count running pods and get the namespace
+	var relayNamespace string
 	runningPods := 0
-	if hasRelayPods {
-		for _, pod := range relayPods.Items {
-			if pod.Status.Phase == "Running" {
-				runningPods++
+	for _, pod := range relayPods.Items {
+		if pod.Status.Phase == corev1.PodRunning {
+			runningPods++
+			if relayNamespace == "" {
+				relayNamespace = pod.Namespace
 			}
 		}
 	}
 
-	// Step 3: Check for Hubble Relay service
-	relaySvc, err := h.k8sClient.CoreV1().Services(hubbleRelayNamespace).Get(ctx, hubbleRelayService, metav1.GetOptions{})
-	hasRelayService := err == nil
-
-	// Step 4: Determine status
-	isNative := h.isNativeHubble(ctx)
-
-	if !hasCilium {
-		result.Message = "Cilium CNI not detected. Install Cilium with Hubble for traffic visibility."
-		return result, nil
-	}
-
-	if !hubbleEnabled {
-		result.Message = "Cilium is installed but Hubble is not enabled. Enable Hubble observability."
-		if isNative {
-			result.Message += " For GKE, run: gcloud container clusters update CLUSTER --enable-dataplane-v2-observability"
-		} else {
-			result.Message += " Run: cilium hubble enable"
-		}
-		return result, nil
-	}
-
-	if !hasRelayPods {
-		result.Message = "Hubble is enabled but Hubble Relay pods not found. The Relay may still be deploying."
-		return result, nil
-	}
-
 	if runningPods == 0 {
-		result.Message = fmt.Sprintf("Hubble Relay pods exist (%d) but none are running", len(relayPods.Items))
+		result.Message = fmt.Sprintf("Hubble Relay pods found (%d) but none are running", len(relayPods.Items))
 		return result, nil
 	}
 
-	if !hasRelayService {
-		result.Message = "Hubble Relay pods are running but service not exposed"
+	log.Printf("[hubble] Found hubble-relay in namespace %q with %d running pod(s)", relayNamespace, runningPods)
+
+	// Step 2: Find the hubble-relay service in the same namespace
+	relaySvc, err := h.k8sClient.CoreV1().Services(relayNamespace).Get(ctx, hubbleRelayService, metav1.GetOptions{})
+	if err != nil {
+		result.Message = fmt.Sprintf("Hubble Relay pods running but service not found in namespace %s", relayNamespace)
 		return result, nil
 	}
 
-	// All checks passed - Hubble is available
+	// Step 3: Check for TLS certs
+	tlsConfig, useTLS := h.loadTLSConfig(ctx, relayNamespace)
+
+	// Step 4: Determine service port and whether it's TLS
+	servicePort := 80
+	if len(relaySvc.Spec.Ports) > 0 {
+		servicePort = int(relaySvc.Spec.Ports[0].Port)
+	}
+
+	// Port 443 typically means TLS is required
+	if servicePort == 443 && !useTLS {
+		result.Message = fmt.Sprintf("Hubble Relay requires TLS (port 443) but client certs not found in secret %s/%s", relayNamespace, hubbleRelayCertSecret)
+		return result, nil
+	}
+
+	// Step 5: Store discovered configuration
 	h.mu.Lock()
-	// Resolve the actual container port (may differ from service port due to named targetPort)
+	h.relayNamespace = relayNamespace
 	h.relayPort = h.resolveTargetPort(ctx, relaySvc)
+	h.useTLS = useTLS
+	h.tlsConfig = tlsConfig
 	h.mu.Unlock()
+
+	// Determine if this is GKE native Hubble
+	isNative := h.isNativeHubble(ctx)
 
 	result.Available = true
 	result.Native = isNative
-	result.Message = fmt.Sprintf("Hubble Relay detected with %d running pod(s)", runningPods)
+
+	tlsStatus := "plaintext"
+	if useTLS {
+		tlsStatus = "TLS"
+	}
+	result.Message = fmt.Sprintf("Hubble Relay detected in %s with %d running pod(s) (%s)", relayNamespace, runningPods, tlsStatus)
 
 	// Try to get version from Cilium config
-	if ciliumConfig.Labels != nil {
+	ciliumConfig, err := h.k8sClient.CoreV1().ConfigMaps(relayNamespace).Get(ctx, "cilium-config", metav1.GetOptions{})
+	if err == nil && ciliumConfig.Labels != nil {
 		if ver, ok := ciliumConfig.Labels["cilium.io/version"]; ok {
 			result.Version = ver
 		}
 	}
 
 	return result, nil
+}
+
+// loadTLSConfig attempts to load TLS credentials from the hubble-relay-client-certs secret
+func (h *HubbleSource) loadTLSConfig(ctx context.Context, namespace string) (*tls.Config, bool) {
+	secret, err := h.k8sClient.CoreV1().Secrets(namespace).Get(ctx, hubbleRelayCertSecret, metav1.GetOptions{})
+	if err != nil {
+		log.Printf("[hubble] TLS cert secret not found in %s/%s: %v", namespace, hubbleRelayCertSecret, err)
+		return nil, false
+	}
+
+	caCert, hasCa := secret.Data["ca.crt"]
+	tlsCert, hasCert := secret.Data["tls.crt"]
+	tlsKey, hasKey := secret.Data["tls.key"]
+
+	if !hasCa || !hasCert || !hasKey {
+		log.Printf("[hubble] TLS secret missing required keys (need ca.crt, tls.crt, tls.key)")
+		return nil, false
+	}
+
+	// Parse CA cert
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		log.Printf("[hubble] Failed to parse CA certificate")
+		return nil, false
+	}
+
+	// Parse client cert
+	clientCert, err := tls.X509KeyPair(tlsCert, tlsKey)
+	if err != nil {
+		log.Printf("[hubble] Failed to parse client certificate: %v", err)
+		return nil, false
+	}
+
+	// ServerName must match the certificate's SAN
+	// GKE uses: *.gke-managed-dpv2-observability.svc.cluster.local
+	// Standard Cilium uses: *.hubble-grpc.cilium.io or similar
+	serverName := fmt.Sprintf("hubble-relay.%s.svc.cluster.local", namespace)
+
+	tlsConfig := &tls.Config{
+		RootCAs:      caCertPool,
+		Certificates: []tls.Certificate{clientCert},
+		ServerName:   serverName,
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	log.Printf("[hubble] Loaded TLS credentials from %s/%s (ServerName: %s)", namespace, hubbleRelayCertSecret, serverName)
+	return tlsConfig, true
 }
 
 // isNativeHubble checks if this is GKE Dataplane V2 (native Hubble)
@@ -163,7 +218,7 @@ func (h *HubbleSource) isNativeHubble(ctx context.Context) bool {
 // The service may use a named targetPort (e.g., "grpc") that maps to a container port
 func (h *HubbleSource) resolveTargetPort(ctx context.Context, svc *corev1.Service) int {
 	if len(svc.Spec.Ports) == 0 {
-		return hubbleRelayGRPCPort
+		return 80
 	}
 
 	svcPort := svc.Spec.Ports[0]
@@ -203,17 +258,22 @@ func (h *HubbleSource) resolveTargetPort(ctx context.Context, svc *corev1.Servic
 		}
 	}
 
-	// Fallback to service port or default
+	// Fallback to service port
 	if svcPort.Port > 0 {
 		return int(svcPort.Port)
 	}
-	return hubbleRelayGRPCPort
+	return 80
 }
 
 // Connect establishes connection to Hubble Relay via port-forward and gRPC
 func (h *HubbleSource) Connect(ctx context.Context, contextName string) (*MetricsConnectionInfo, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+
+	namespace := h.relayNamespace
+	if namespace == "" {
+		namespace = "kube-system" // fallback
+	}
 
 	// If already connected to the same context, verify connection is still valid
 	if h.grpcConn != nil && h.currentContext == contextName {
@@ -223,7 +283,7 @@ func (h *HubbleSource) Connect(ctx context.Context, contextName string) (*Metric
 				Connected:   true,
 				LocalPort:   h.localPort,
 				Address:     fmt.Sprintf("localhost:%d", h.localPort),
-				Namespace:   hubbleRelayNamespace,
+				Namespace:   namespace,
 				ServiceName: hubbleRelayService,
 				ContextName: contextName,
 			}, nil
@@ -240,25 +300,23 @@ func (h *HubbleSource) Connect(ctx context.Context, contextName string) (*Metric
 
 	// Get the relay port from detection if not already set
 	if h.relayPort == 0 {
-		relaySvc, err := h.k8sClient.CoreV1().Services(hubbleRelayNamespace).Get(ctx, hubbleRelayService, metav1.GetOptions{})
+		relaySvc, err := h.k8sClient.CoreV1().Services(namespace).Get(ctx, hubbleRelayService, metav1.GetOptions{})
 		if err != nil {
 			return &MetricsConnectionInfo{
 				Connected: false,
-				Error:     fmt.Sprintf("Hubble Relay service not found: %v", err),
+				Error:     fmt.Sprintf("Hubble Relay service not found in %s: %v", namespace, err),
 			}, nil
 		}
-		// Get the actual target port (container port), not the service port
-		// The service may map port 80 -> containerPort 4245 (named "grpc")
 		h.relayPort = h.resolveTargetPort(ctx, relaySvc)
 	}
 
 	// Start port-forward to Hubble Relay
-	log.Printf("[hubble] Starting port-forward to %s/%s:%d", hubbleRelayNamespace, hubbleRelayService, h.relayPort)
-	connInfo, err := StartMetricsPortForward(ctx, hubbleRelayNamespace, hubbleRelayService, h.relayPort, contextName)
+	log.Printf("[hubble] Starting port-forward to %s/%s:%d", namespace, hubbleRelayService, h.relayPort)
+	connInfo, err := StartMetricsPortForward(ctx, namespace, hubbleRelayService, h.relayPort, contextName)
 	if err != nil {
 		return &MetricsConnectionInfo{
 			Connected:   false,
-			Namespace:   hubbleRelayNamespace,
+			Namespace:   namespace,
 			ServiceName: hubbleRelayService,
 			Error:       fmt.Sprintf("Failed to start port-forward: %v", err),
 		}, nil
@@ -270,13 +328,21 @@ func (h *HubbleSource) Connect(ctx context.Context, contextName string) (*Metric
 
 	h.localPort = connInfo.LocalPort
 
-	// Create gRPC connection
+	// Create gRPC connection with or without TLS
 	grpcAddr := fmt.Sprintf("localhost:%d", h.localPort)
-	log.Printf("[hubble] Connecting to gRPC at %s", grpcAddr)
+	log.Printf("[hubble] Connecting to gRPC at %s (TLS: %v)", grpcAddr, h.useTLS)
 
-	conn, err := grpc.NewClient(grpcAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
+	var conn *grpc.ClientConn
+	if h.useTLS && h.tlsConfig != nil {
+		conn, err = grpc.NewClient(grpcAddr,
+			grpc.WithTransportCredentials(credentials.NewTLS(h.tlsConfig)),
+		)
+	} else {
+		conn, err = grpc.NewClient(grpcAddr,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+	}
+
 	if err != nil {
 		// Clean up port-forward on gRPC connection failure
 		StopMetricsPortForward()
@@ -308,7 +374,7 @@ func (h *HubbleSource) Connect(ctx context.Context, contextName string) (*Metric
 		Connected:   true,
 		LocalPort:   h.localPort,
 		Address:     grpcAddr,
-		Namespace:   hubbleRelayNamespace,
+		Namespace:   namespace,
 		ServiceName: hubbleRelayService,
 		ContextName: contextName,
 	}, nil
@@ -646,20 +712,29 @@ func (h *HubbleSource) Close() error {
 	defer h.mu.Unlock()
 	h.closeConnectionLocked()
 	h.currentContext = ""
+	h.relayNamespace = ""
 	return nil
 }
 
 // GetPortForwardInstructions returns kubectl commands for manual access
 func (h *HubbleSource) GetPortForwardInstructions() string {
-	return `To access Hubble flows directly, run:
+	h.mu.RLock()
+	namespace := h.relayNamespace
+	h.mu.RUnlock()
+
+	if namespace == "" {
+		namespace = "kube-system"
+	}
+
+	return fmt.Sprintf(`To access Hubble flows directly, run:
 
 # Port-forward Hubble Relay (gRPC API)
-kubectl -n kube-system port-forward svc/hubble-relay 4245:80
+kubectl -n %s port-forward svc/hubble-relay 4245:80
 
 # Then use Hubble CLI:
 hubble observe --server localhost:4245
 
-# Or port-forward Hubble UI:
-kubectl -n kube-system port-forward svc/hubble-ui 12000:80
-# Then open http://localhost:12000`
+# Or port-forward Hubble UI (if installed):
+kubectl -n %s port-forward svc/hubble-ui 12000:80
+# Then open http://localhost:12000`, namespace, namespace)
 }

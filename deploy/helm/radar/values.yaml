@@ -44,6 +44,10 @@ rbac:
   # Allow port forwarding (enables port forward feature)
   portForward: false
 
+  # Traffic visibility (Hubble/Cilium integration)
+  # Grants read access ONLY to hubble-relay-client-certs secret for TLS auth
+  traffic: true
+
   # CRD access - all common groups enabled by default
   # Granting RBAC for CRDs that don't exist has no effect.
   crdGroups:
