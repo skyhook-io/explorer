@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -116,6 +117,7 @@ func (s *Server) handleFluxReconcile(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		log.Printf("[flux] Failed to reconcile %s %s/%s: %v", kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -178,6 +180,11 @@ func (s *Server) setFluxSuspend(w http.ResponseWriter, r *http.Request, suspend 
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		action := "suspend"
+		if !suspend {
+			action = "resume"
+		}
+		log.Printf("[flux] Failed to %s %s %s/%s: %v", action, kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -315,6 +322,7 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 		metav1.PatchOptions{},
 	)
 	if err != nil {
+		log.Printf("[flux] Failed to reconcile source %s %s/%s: %v", sourceKind, sourceNamespace, sourceName, err)
 		s.writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to reconcile source: %v", err))
 		return
 	}
@@ -328,7 +336,10 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		s.writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to reconcile resource: %v", err))
+		log.Printf("[flux] Partial sync-with-source: source %s/%s reconciled, but %s %s/%s failed: %v",
+			sourceNamespace, sourceName, kind, namespace, name, err)
+		s.writeError(w, http.StatusInternalServerError,
+			fmt.Sprintf("failed to reconcile resource (note: source %s/%s was reconciled): %v", sourceName, sourceNamespace, err))
 		return
 	}
 

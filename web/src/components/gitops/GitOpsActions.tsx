@@ -4,10 +4,6 @@ import { clsx } from 'clsx'
 interface GitOpsActionsProps {
   /** The GitOps tool type */
   tool: 'flux' | 'argo'
-  /** Resource kind (for Flux) or 'Application' (for Argo) */
-  kind: string
-  namespace: string
-  name: string
   /** Whether the resource is currently suspended */
   suspended: boolean
   /** Sync/Reconcile handler */
@@ -31,9 +27,6 @@ interface GitOpsActionsProps {
  */
 export function GitOpsActions({
   tool,
-  kind: _kind,
-  namespace: _namespace,
-  name: _name,
   suspended,
   onSync,
   onSuspend,

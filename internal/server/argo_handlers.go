@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -76,8 +77,8 @@ func (s *Server) handleArgoSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if there's already an operation in progress
-	if _, found, _ := unstructuredNestedField(app.Object, "status", "operationState", "phase"); found {
-		phase, _, _ := unstructuredNestedString(app.Object, "status", "operationState", "phase")
+	if _, found := unstructuredNestedField(app.Object, "status", "operationState", "phase"); found {
+		phase, _ := unstructuredNestedString(app.Object, "status", "operationState", "phase")
 		if phase == "Running" {
 			s.writeError(w, http.StatusConflict, "sync operation already in progress")
 			return
@@ -121,6 +122,7 @@ func (s *Server) handleArgoSync(w http.ResponseWriter, r *http.Request) {
 		metav1.PatchOptions{},
 	)
 	if err != nil {
+		log.Printf("[argo] Failed to sync application %s/%s: %v", namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -141,6 +143,9 @@ func (s *Server) handleArgoRefresh(w http.ResponseWriter, r *http.Request) {
 	refreshType := r.URL.Query().Get("type")
 	if refreshType == "" {
 		refreshType = "normal"
+	} else if refreshType != "normal" && refreshType != "hard" {
+		s.writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid refresh type %q: must be 'normal' or 'hard'", refreshType))
+		return
 	}
 
 	client := k8s.GetDynamicClient()
@@ -178,6 +183,7 @@ func (s *Server) handleArgoRefresh(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		log.Printf("[argo] Failed to refresh application %s/%s: %v", namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -215,7 +221,7 @@ func (s *Server) handleArgoTerminate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check the operation state
-	phase, found, _ := unstructuredNestedString(app.Object, "status", "operationState", "phase")
+	phase, found := unstructuredNestedString(app.Object, "status", "operationState", "phase")
 	if !found || phase != "Running" {
 		s.writeError(w, http.StatusBadRequest, "no sync operation in progress")
 		return
@@ -234,8 +240,11 @@ func (s *Server) handleArgoTerminate(w http.ResponseWriter, r *http.Request) {
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		// If the operation field doesn't exist, that's fine
-		if !strings.Contains(err.Error(), "nonexistent") {
+		// If the operation field doesn't exist, the operation may have already completed
+		if strings.Contains(err.Error(), "nonexistent") {
+			log.Printf("[argo] Terminate: operation field already removed for %s/%s (may have completed)", namespace, name)
+		} else {
+			log.Printf("[argo] Failed to terminate operation for %s/%s: %v", namespace, name, err)
 			s.writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -292,7 +301,7 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		selfHeal := true
 
 		// Try to get existing settings from annotations (we store them when suspending)
-		annotations, _, _ := unstructuredNestedStringMap(app.Object, "metadata", "annotations")
+		annotations, _ := unstructuredNestedStringMap(app.Object, "metadata", "annotations")
 		if annotations != nil {
 			if v, ok := annotations["radar.skyhook.io/suspended-prune"]; ok {
 				prune = v == "true"
@@ -324,7 +333,7 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		prune := false
 		selfHeal := false
 
-		if automated, found, _ := unstructuredNestedMap(app.Object, "spec", "syncPolicy", "automated"); found && automated != nil {
+		if automated, found := unstructuredNestedMap(app.Object, "spec", "syncPolicy", "automated"); found && automated != nil {
 			if v, ok := automated["prune"].(bool); ok {
 				prune = v
 			}
@@ -362,6 +371,11 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		metav1.PatchOptions{},
 	)
 	if err != nil {
+		action := "suspend"
+		if enable {
+			action = "resume"
+		}
+		log.Printf("[argo] Failed to %s application %s/%s: %v", action, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -376,49 +390,49 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 	})
 }
 
-// Helper functions for unstructured access
+// Helper functions for unstructured access (similar to k8s.io/apimachinery unstructured helpers)
 
-func unstructuredNestedField(obj map[string]any, fields ...string) (any, bool, error) {
+func unstructuredNestedField(obj map[string]any, fields ...string) (any, bool) {
 	var val any = obj
 	for _, field := range fields {
 		if m, ok := val.(map[string]any); ok {
 			val, ok = m[field]
 			if !ok {
-				return nil, false, nil
+				return nil, false
 			}
 		} else {
-			return nil, false, nil
+			return nil, false
 		}
 	}
-	return val, true, nil
+	return val, true
 }
 
-func unstructuredNestedString(obj map[string]any, fields ...string) (string, bool, error) {
-	val, found, err := unstructuredNestedField(obj, fields...)
-	if !found || err != nil {
-		return "", found, err
+func unstructuredNestedString(obj map[string]any, fields ...string) (string, bool) {
+	val, found := unstructuredNestedField(obj, fields...)
+	if !found {
+		return "", false
 	}
 	if s, ok := val.(string); ok {
-		return s, true, nil
+		return s, true
 	}
-	return "", false, nil
+	return "", false
 }
 
-func unstructuredNestedMap(obj map[string]any, fields ...string) (map[string]any, bool, error) {
-	val, found, err := unstructuredNestedField(obj, fields...)
-	if !found || err != nil {
-		return nil, found, err
+func unstructuredNestedMap(obj map[string]any, fields ...string) (map[string]any, bool) {
+	val, found := unstructuredNestedField(obj, fields...)
+	if !found {
+		return nil, false
 	}
 	if m, ok := val.(map[string]any); ok {
-		return m, true, nil
+		return m, true
 	}
-	return nil, false, nil
+	return nil, false
 }
 
-func unstructuredNestedStringMap(obj map[string]any, fields ...string) (map[string]string, bool, error) {
-	val, found, err := unstructuredNestedField(obj, fields...)
-	if !found || err != nil {
-		return nil, found, err
+func unstructuredNestedStringMap(obj map[string]any, fields ...string) (map[string]string, bool) {
+	val, found := unstructuredNestedField(obj, fields...)
+	if !found {
+		return nil, false
 	}
 	if m, ok := val.(map[string]any); ok {
 		result := make(map[string]string)
@@ -427,7 +441,7 @@ func unstructuredNestedStringMap(obj map[string]any, fields ...string) (map[stri
 				result[k] = s
 			}
 		}
-		return result, true, nil
+		return result, true
 	}
-	return nil, false, nil
+	return nil, false
 }
