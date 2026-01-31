@@ -172,6 +172,7 @@ Monitor and manage FluxCD and ArgoCD resources with unified status views and act
 - Real-time sync status, health indicators, and reconciliation countdowns
 - Trigger reconciliation, suspend/resume resources, and view managed resource inventory
 - Problem detection with clear alerts for degraded or out-of-sync resources
+- **Note**: Topology connections between GitOps resources and managed workloads only appear when both are in the same cluster. FluxCD typically deploys to its own cluster. ArgoCD often manages remote clusters — connect Radar to the target cluster to see workloads, or to the ArgoCD cluster to see Application status.
 
 ### Traffic
 
