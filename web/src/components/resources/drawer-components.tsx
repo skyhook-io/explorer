@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Copy, Check, Tag } from 'lucide-react'
+import { ChevronDown, ChevronRight, Copy, Check, Tag, AlertTriangle } from 'lucide-react'
 import { clsx } from 'clsx'
 import { formatAge } from './resource-utils'
 
@@ -141,6 +141,60 @@ export function ConditionsSection({ conditions }: { conditions?: any[] }) {
         ))}
       </div>
     </Section>
+  )
+}
+
+/** Problem type for ProblemAlerts component */
+export interface Problem {
+  color: 'red' | 'yellow'
+  message: string
+}
+
+/** Displays a list of problem alerts (warnings and errors) for GitOps resources */
+export function ProblemAlerts({ problems }: { problems: Problem[] }) {
+  if (problems.length === 0) return null
+
+  return (
+    <>
+      {problems.map((problem, i) => (
+        <div
+          key={i}
+          className={clsx(
+            'mb-4 p-3 border rounded-lg',
+            problem.color === 'red'
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-yellow-500/10 border-yellow-500/30'
+          )}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              className={clsx(
+                'w-4 h-4 mt-0.5 shrink-0',
+                problem.color === 'red' ? 'text-red-400' : 'text-yellow-400'
+              )}
+            />
+            <div className="flex-1 min-w-0">
+              <div
+                className={clsx(
+                  'text-sm font-medium',
+                  problem.color === 'red' ? 'text-red-400' : 'text-yellow-400'
+                )}
+              >
+                {problem.color === 'red' ? 'Issue Detected' : 'Warning'}
+              </div>
+              <div
+                className={clsx(
+                  'text-xs mt-1',
+                  problem.color === 'red' ? 'text-red-300/80' : 'text-yellow-300/80'
+                )}
+              >
+                {problem.message}
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 

@@ -1,6 +1,5 @@
-import { Layers, AlertTriangle, FolderTree } from 'lucide-react'
-import { clsx } from 'clsx'
-import { Section, PropertyList, Property, ConditionsSection } from '../drawer-components'
+import { Layers, FolderTree } from 'lucide-react'
+import { Section, PropertyList, Property, ConditionsSection, ProblemAlerts } from '../drawer-components'
 import { formatAge } from '../resource-utils'
 import { GitOpsStatusBadge, ManagedResourcesList, SyncCountdown } from '../../gitops'
 import { fluxConditionsToGitOpsStatus, parseFluxInventory, type FluxCondition } from '../../../types/gitops'
@@ -45,45 +44,7 @@ export function KustomizationRenderer({ data }: KustomizationRendererProps) {
 
   return (
     <>
-      {/* Problem alerts */}
-      {problems.map((problem, i) => (
-        <div
-          key={i}
-          className={clsx(
-            'mb-4 p-3 border rounded-lg',
-            problem.color === 'red'
-              ? 'bg-red-500/10 border-red-500/30'
-              : 'bg-yellow-500/10 border-yellow-500/30'
-          )}
-        >
-          <div className="flex items-start gap-2">
-            <AlertTriangle
-              className={clsx(
-                'w-4 h-4 mt-0.5 shrink-0',
-                problem.color === 'red' ? 'text-red-400' : 'text-yellow-400'
-              )}
-            />
-            <div className="flex-1 min-w-0">
-              <div
-                className={clsx(
-                  'text-sm font-medium',
-                  problem.color === 'red' ? 'text-red-400' : 'text-yellow-400'
-                )}
-              >
-                {problem.color === 'red' ? 'Issue Detected' : 'Warning'}
-              </div>
-              <div
-                className={clsx(
-                  'text-xs mt-1',
-                  problem.color === 'red' ? 'text-red-300/80' : 'text-yellow-300/80'
-                )}
-              >
-                {problem.message}
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
+      <ProblemAlerts problems={problems} />
 
       {/* Status section */}
       <Section title="Status">

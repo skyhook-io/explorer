@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,7 +26,7 @@ var (
 	}
 	fluxOCIRepoGVR = schema.GroupVersionResource{
 		Group:    "source.toolkit.fluxcd.io",
-		Version:  "v1beta2",
+		Version:  "v1",
 		Resource: "ocirepositories",
 	}
 	fluxHelmRepoGVR = schema.GroupVersionResource{
@@ -95,12 +96,14 @@ func (s *Server) handleFluxReconcile(w http.ResponseWriter, r *http.Request) {
 
 	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		log.Printf("[flux] Failed to marshal reconcile patch for %s %s/%s: %v", kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to create patch")
 		return
 	}
 
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[flux] Dynamic client unavailable for %s %s/%s", kind, namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -113,7 +116,7 @@ func (s *Server) handleFluxReconcile(w http.ResponseWriter, r *http.Request) {
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -122,9 +125,12 @@ func (s *Server) handleFluxReconcile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, map[string]string{
-		"message":     "Reconciliation triggered",
-		"requestedAt": timestamp,
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:     "Reconciliation triggered",
+		Operation:   "reconcile",
+		Tool:        "fluxcd",
+		Resource:    GitOpsResourceRef{Kind: formatFluxKind(kind), Name: name, Namespace: namespace},
+		RequestedAt: timestamp,
 	})
 }
 
@@ -156,14 +162,21 @@ func (s *Server) setFluxSuspend(w http.ResponseWriter, r *http.Request, suspend 
 		},
 	}
 
+	action := "suspend"
+	if !suspend {
+		action = "resume"
+	}
+
 	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		log.Printf("[flux] Failed to marshal %s patch for %s %s/%s: %v", action, kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to create patch")
 		return
 	}
 
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[flux] Dynamic client unavailable for %s %s/%s", kind, namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -176,26 +189,27 @@ func (s *Server) setFluxSuspend(w http.ResponseWriter, r *http.Request, suspend 
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
-		}
-		action := "suspend"
-		if !suspend {
-			action = "resume"
 		}
 		log.Printf("[flux] Failed to %s %s %s/%s: %v", action, kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	action := "suspended"
+	actionPast := "suspended"
+	operation := "suspend"
 	if !suspend {
-		action = "resumed"
+		actionPast = "resumed"
+		operation = "resume"
 	}
 
-	s.writeJSON(w, map[string]string{
-		"message": fmt.Sprintf("%s %s", formatFluxKind(kind), action),
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:   fmt.Sprintf("%s %s", formatFluxKind(kind), actionPast),
+		Operation: operation,
+		Tool:      "fluxcd",
+		Resource:  GitOpsResourceRef{Kind: formatFluxKind(kind), Name: name, Namespace: namespace},
 	})
 }
 
@@ -234,6 +248,7 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[flux] Dynamic client unavailable for %s %s/%s", kind, namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -241,10 +256,11 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 	// Get the resource to extract sourceRef
 	resource, err := client.Resource(gvr).Namespace(namespace).Get(r.Context(), name, metav1.GetOptions{})
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		log.Printf("[flux] Failed to get %s %s/%s for sync-with-source: %v", kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -253,6 +269,7 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 	var sourceKind, sourceName, sourceNamespace string
 	spec, ok := resource.Object["spec"].(map[string]any)
 	if !ok {
+		log.Printf("[flux] Invalid spec for %s %s/%s: expected map[string]any", kind, namespace, name)
 		s.writeError(w, http.StatusInternalServerError, "invalid resource spec")
 		return
 	}
@@ -309,6 +326,7 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 
 	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		log.Printf("[flux] Failed to marshal sync-with-source patch for %s %s/%s: %v", kind, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to create patch")
 		return
 	}
@@ -343,11 +361,12 @@ func (s *Server) handleFluxSyncWithSource(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	s.writeJSON(w, map[string]any{
-		"message":         "Sync with source triggered",
-		"requestedAt":     timestamp,
-		"sourceKind":      sourceKind,
-		"sourceName":      sourceName,
-		"sourceNamespace": sourceNamespace,
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:     "Sync with source triggered",
+		Operation:   "reconcile",
+		Tool:        "fluxcd",
+		Resource:    GitOpsResourceRef{Kind: formatFluxKind(kind), Name: name, Namespace: namespace},
+		RequestedAt: timestamp,
+		Source:      &GitOpsResourceRef{Kind: formatFluxKind(sourceKind), Name: sourceName, Namespace: sourceNamespace},
 	})
 }

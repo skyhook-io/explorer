@@ -311,32 +311,7 @@ func (b *Builder) buildResourcesTopology(opts BuildOptions) (*Topology, error) {
 			status, _, _ := unstructured.NestedMap(ks.Object, "status")
 
 			// Get ready condition
-			readyStatus := "Unknown"
-			var nodeStatus HealthStatus
-			if status != nil {
-				conditions, ok, _ := unstructured.NestedSlice(status, "conditions")
-				if ok {
-					for _, c := range conditions {
-						cond, ok := c.(map[string]any)
-						if !ok {
-							continue
-						}
-						if cond["type"] == "Ready" {
-							if s, ok := cond["status"].(string); ok {
-								readyStatus = s
-								if s == "True" {
-									nodeStatus = StatusHealthy
-								} else if s == "False" {
-									nodeStatus = StatusUnhealthy
-								} else {
-									nodeStatus = StatusUnknown
-								}
-							}
-							break
-						}
-					}
-				}
-			}
+			readyStatus, nodeStatus := getFluxReadyStatus(status)
 
 			// Get inventory count
 			resourceCount := 0
@@ -398,32 +373,7 @@ func (b *Builder) buildResourcesTopology(opts BuildOptions) (*Topology, error) {
 			status, _, _ := unstructured.NestedMap(repo.Object, "status")
 
 			// Get ready condition
-			readyStatus := "Unknown"
-			var nodeStatus HealthStatus
-			if status != nil {
-				conditions, ok, _ := unstructured.NestedSlice(status, "conditions")
-				if ok {
-					for _, c := range conditions {
-						cond, ok := c.(map[string]any)
-						if !ok {
-							continue
-						}
-						if cond["type"] == "Ready" {
-							if s, ok := cond["status"].(string); ok {
-								readyStatus = s
-								if s == "True" {
-									nodeStatus = StatusHealthy
-								} else if s == "False" {
-									nodeStatus = StatusUnhealthy
-								} else {
-									nodeStatus = StatusUnknown
-								}
-							}
-							break
-						}
-					}
-				}
-			}
+			readyStatus, nodeStatus := getFluxReadyStatus(status)
 
 			// Get branch from spec
 			branch := ""
@@ -480,32 +430,7 @@ func (b *Builder) buildResourcesTopology(opts BuildOptions) (*Topology, error) {
 			status, _, _ := unstructured.NestedMap(hr.Object, "status")
 
 			// Get ready condition
-			readyStatus := "Unknown"
-			var nodeStatus HealthStatus
-			if status != nil {
-				conditions, ok, _ := unstructured.NestedSlice(status, "conditions")
-				if ok {
-					for _, c := range conditions {
-						cond, ok := c.(map[string]any)
-						if !ok {
-							continue
-						}
-						if cond["type"] == "Ready" {
-							if s, ok := cond["status"].(string); ok {
-								readyStatus = s
-								if s == "True" {
-									nodeStatus = StatusHealthy
-								} else if s == "False" {
-									nodeStatus = StatusUnhealthy
-								} else {
-									nodeStatus = StatusUnknown
-								}
-							}
-							break
-						}
-					}
-				}
-			}
+			readyStatus, nodeStatus := getFluxReadyStatus(status)
 
 			// Get last release revision
 			revision := 0
@@ -1902,6 +1827,37 @@ func getPVCStatus(phase corev1.PersistentVolumeClaimPhase) HealthStatus {
 	default:
 		return StatusUnknown
 	}
+}
+
+// getFluxReadyStatus extracts the Ready condition status from a FluxCD resource's status map.
+// Returns the ready status string ("True", "False", "Unknown") and the corresponding HealthStatus.
+func getFluxReadyStatus(status map[string]any) (string, HealthStatus) {
+	if status == nil {
+		return "Unknown", StatusUnknown
+	}
+	conditions, ok, _ := unstructured.NestedSlice(status, "conditions")
+	if !ok {
+		return "Unknown", StatusUnknown
+	}
+	for _, c := range conditions {
+		cond, ok := c.(map[string]any)
+		if !ok || cond["type"] != "Ready" {
+			continue
+		}
+		s, ok := cond["status"].(string)
+		if !ok {
+			return "Unknown", StatusUnknown
+		}
+		switch s {
+		case "True":
+			return s, StatusHealthy
+		case "False":
+			return s, StatusUnhealthy
+		default:
+			return s, StatusUnknown
+		}
+	}
+	return "Unknown", StatusUnknown
 }
 
 func matchesSelector(labels, selector map[string]string) bool {

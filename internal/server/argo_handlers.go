@@ -9,44 +9,20 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/skyhook-io/radar/internal/k8s"
 )
 
-// ArgoCD API groups and versions
-var (
-	argoApplicationGVR = schema.GroupVersionResource{
-		Group:    "argoproj.io",
-		Version:  "v1alpha1",
-		Resource: "applications",
-	}
-	argoApplicationSetGVR = schema.GroupVersionResource{
-		Group:    "argoproj.io",
-		Version:  "v1alpha1",
-		Resource: "applicationsets",
-	}
-	argoAppProjectGVR = schema.GroupVersionResource{
-		Group:    "argoproj.io",
-		Version:  "v1alpha1",
-		Resource: "appprojects",
-	}
-)
-
-// getArgoGVR returns the appropriate GVR for an ArgoCD resource kind
-func getArgoGVR(kind string) (schema.GroupVersionResource, error) {
-	switch strings.ToLower(kind) {
-	case "application", "applications":
-		return argoApplicationGVR, nil
-	case "applicationset", "applicationsets":
-		return argoApplicationSetGVR, nil
-	case "appproject", "appprojects":
-		return argoAppProjectGVR, nil
-	default:
-		return schema.GroupVersionResource{}, fmt.Errorf("unknown ArgoCD resource kind: %s", kind)
-	}
+// ArgoCD Application GVR - all handlers operate on Applications
+var argoApplicationGVR = schema.GroupVersionResource{
+	Group:    "argoproj.io",
+	Version:  "v1alpha1",
+	Resource: "applications",
 }
 
 // handleArgoSync triggers a sync operation on an ArgoCD Application
@@ -57,6 +33,7 @@ func (s *Server) handleArgoSync(w http.ResponseWriter, r *http.Request) {
 
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[argo] Dynamic client unavailable for sync Application %s/%s", namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -68,17 +45,18 @@ func (s *Server) handleArgoSync(w http.ResponseWriter, r *http.Request) {
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		log.Printf("[argo] Failed to get application %s/%s: %v", namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// Check if there's already an operation in progress
-	if _, found := unstructuredNestedField(app.Object, "status", "operationState", "phase"); found {
-		phase, _ := unstructuredNestedString(app.Object, "status", "operationState", "phase")
+	phase, found, _ := unstructured.NestedString(app.Object, "status", "operationState", "phase")
+	if found {
 		if phase == "Running" {
 			s.writeError(w, http.StatusConflict, "sync operation already in progress")
 			return
@@ -110,6 +88,7 @@ func (s *Server) handleArgoSync(w http.ResponseWriter, r *http.Request) {
 
 	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		log.Printf("[argo] Failed to marshal sync patch for %s/%s: %v", namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to create patch")
 		return
 	}
@@ -127,9 +106,12 @@ func (s *Server) handleArgoSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, map[string]string{
-		"message":     "Sync operation initiated",
-		"requestedAt": timestamp,
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:     "Sync operation initiated",
+		Operation:   "sync",
+		Tool:        "argocd",
+		Resource:    GitOpsResourceRef{Kind: "Application", Name: name, Namespace: namespace},
+		RequestedAt: timestamp,
 	})
 }
 
@@ -150,6 +132,7 @@ func (s *Server) handleArgoRefresh(w http.ResponseWriter, r *http.Request) {
 
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[argo] Dynamic client unavailable for refresh Application %s/%s", namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -167,6 +150,7 @@ func (s *Server) handleArgoRefresh(w http.ResponseWriter, r *http.Request) {
 
 	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		log.Printf("[argo] Failed to marshal refresh patch for %s/%s: %v", namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to create patch")
 		return
 	}
@@ -179,7 +163,7 @@ func (s *Server) handleArgoRefresh(w http.ResponseWriter, r *http.Request) {
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
@@ -188,9 +172,12 @@ func (s *Server) handleArgoRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.writeJSON(w, map[string]string{
-		"message":     fmt.Sprintf("Refresh (%s) triggered", refreshType),
-		"requestedAt": timestamp,
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:     fmt.Sprintf("Refresh (%s) triggered", refreshType),
+		Operation:   "refresh",
+		Tool:        "argocd",
+		Resource:    GitOpsResourceRef{Kind: "Application", Name: name, Namespace: namespace},
+		RequestedAt: timestamp,
 	})
 }
 
@@ -201,6 +188,7 @@ func (s *Server) handleArgoTerminate(w http.ResponseWriter, r *http.Request) {
 
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[argo] Dynamic client unavailable for terminate Application %s/%s", namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -212,16 +200,17 @@ func (s *Server) handleArgoTerminate(w http.ResponseWriter, r *http.Request) {
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		log.Printf("[argo] Failed to get application %s/%s for terminate: %v", namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	// Check the operation state
-	phase, found := unstructuredNestedString(app.Object, "status", "operationState", "phase")
+	phase, found, _ := unstructured.NestedString(app.Object, "status", "operationState", "phase")
 	if !found || phase != "Running" {
 		s.writeError(w, http.StatusBadRequest, "no sync operation in progress")
 		return
@@ -243,15 +232,25 @@ func (s *Server) handleArgoTerminate(w http.ResponseWriter, r *http.Request) {
 		// If the operation field doesn't exist, the operation may have already completed
 		if strings.Contains(err.Error(), "nonexistent") {
 			log.Printf("[argo] Terminate: operation field already removed for %s/%s (may have completed)", namespace, name)
-		} else {
-			log.Printf("[argo] Failed to terminate operation for %s/%s: %v", namespace, name, err)
-			s.writeError(w, http.StatusInternalServerError, err.Error())
+			// Return informative response - the operation wasn't terminated by us
+			s.writeJSON(w, GitOpsOperationResponse{
+				Message:   "No operation to terminate (may have already completed)",
+				Operation: "terminate",
+				Tool:      "argocd",
+				Resource:  GitOpsResourceRef{Kind: "Application", Name: name, Namespace: namespace},
+			})
 			return
 		}
+		log.Printf("[argo] Failed to terminate operation for %s/%s: %v", namespace, name, err)
+		s.writeError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
-	s.writeJSON(w, map[string]string{
-		"message": "Sync operation terminated",
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:   "Sync operation terminated",
+		Operation: "terminate",
+		Tool:      "argocd",
+		Resource:  GitOpsResourceRef{Kind: "Application", Name: name, Namespace: namespace},
 	})
 }
 
@@ -271,8 +270,14 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
 
+	action := "suspend"
+	if enable {
+		action = "resume"
+	}
+
 	client := k8s.GetDynamicClient()
 	if client == nil {
+		log.Printf("[argo] Dynamic client unavailable for %s Application %s/%s", action, namespace, name)
 		s.writeError(w, http.StatusServiceUnavailable, "dynamic client not available")
 		return
 	}
@@ -284,10 +289,11 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if apierrors.IsNotFound(err) {
 			s.writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
+		log.Printf("[argo] Failed to get application %s/%s for %s: %v", namespace, name, action, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -301,7 +307,7 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		selfHeal := true
 
 		// Try to get existing settings from annotations (we store them when suspending)
-		annotations, _ := unstructuredNestedStringMap(app.Object, "metadata", "annotations")
+		annotations, _, _ := unstructured.NestedStringMap(app.Object, "metadata", "annotations")
 		if annotations != nil {
 			if v, ok := annotations["radar.skyhook.io/suspended-prune"]; ok {
 				prune = v == "true"
@@ -333,7 +339,8 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		prune := false
 		selfHeal := false
 
-		if automated, found := unstructuredNestedMap(app.Object, "spec", "syncPolicy", "automated"); found && automated != nil {
+		automated, found, _ := unstructured.NestedMap(app.Object, "spec", "syncPolicy", "automated")
+		if found && automated != nil {
 			if v, ok := automated["prune"].(bool); ok {
 				prune = v
 			}
@@ -359,6 +366,7 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 
 	patchBytes, err := json.Marshal(patch)
 	if err != nil {
+		log.Printf("[argo] Failed to marshal %s patch for %s/%s: %v", action, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, "failed to create patch")
 		return
 	}
@@ -371,77 +379,22 @@ func (s *Server) setArgoAutomatedSync(w http.ResponseWriter, r *http.Request, en
 		metav1.PatchOptions{},
 	)
 	if err != nil {
-		action := "suspend"
-		if enable {
-			action = "resume"
-		}
 		log.Printf("[argo] Failed to %s application %s/%s: %v", action, namespace, name, err)
 		s.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	action := "suspended"
+	actionPast := "suspended"
+	operation := "suspend"
 	if enable {
-		action = "resumed"
+		actionPast = "resumed"
+		operation = "resume"
 	}
 
-	s.writeJSON(w, map[string]string{
-		"message": fmt.Sprintf("Application %s (automated sync %s)", action, action),
+	s.writeJSON(w, GitOpsOperationResponse{
+		Message:   fmt.Sprintf("Application %s (automated sync %s)", actionPast, actionPast),
+		Operation: operation,
+		Tool:      "argocd",
+		Resource:  GitOpsResourceRef{Kind: "Application", Name: name, Namespace: namespace},
 	})
-}
-
-// Helper functions for unstructured access (similar to k8s.io/apimachinery unstructured helpers)
-
-func unstructuredNestedField(obj map[string]any, fields ...string) (any, bool) {
-	var val any = obj
-	for _, field := range fields {
-		if m, ok := val.(map[string]any); ok {
-			val, ok = m[field]
-			if !ok {
-				return nil, false
-			}
-		} else {
-			return nil, false
-		}
-	}
-	return val, true
-}
-
-func unstructuredNestedString(obj map[string]any, fields ...string) (string, bool) {
-	val, found := unstructuredNestedField(obj, fields...)
-	if !found {
-		return "", false
-	}
-	if s, ok := val.(string); ok {
-		return s, true
-	}
-	return "", false
-}
-
-func unstructuredNestedMap(obj map[string]any, fields ...string) (map[string]any, bool) {
-	val, found := unstructuredNestedField(obj, fields...)
-	if !found {
-		return nil, false
-	}
-	if m, ok := val.(map[string]any); ok {
-		return m, true
-	}
-	return nil, false
-}
-
-func unstructuredNestedStringMap(obj map[string]any, fields ...string) (map[string]string, bool) {
-	val, found := unstructuredNestedField(obj, fields...)
-	if !found {
-		return nil, false
-	}
-	if m, ok := val.(map[string]any); ok {
-		result := make(map[string]string)
-		for k, v := range m {
-			if s, ok := v.(string); ok {
-				result[k] = s
-			}
-		}
-		return result, true
-	}
-	return nil, false
 }

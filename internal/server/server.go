@@ -3,7 +3,6 @@ package server
 import (
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -23,7 +22,6 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/labels"
 
-	explorerErrors "github.com/skyhook-io/radar/internal/errors"
 	"github.com/skyhook-io/radar/internal/helm"
 	"github.com/skyhook-io/radar/internal/k8s"
 	"github.com/skyhook-io/radar/internal/timeline"
@@ -1048,40 +1046,6 @@ func (s *Server) writeError(w http.ResponseWriter, status int, message string) {
 	if err := json.NewEncoder(w).Encode(map[string]string{"error": message}); err != nil {
 		log.Printf("Failed to encode error response: %v", err)
 	}
-}
-
-// writeExplorerError writes an ExplorerError as a structured JSON response.
-// It maps error codes to appropriate HTTP status codes.
-func (s *Server) writeExplorerError(w http.ResponseWriter, err error) {
-	var explorerErr *explorerErrors.ExplorerError
-	if !errors.As(err, &explorerErr) {
-		// Not an ExplorerError, use generic internal server error
-		s.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Map error codes to HTTP status
-	status := http.StatusInternalServerError
-	switch explorerErr.Code {
-	case explorerErrors.ErrBadRequest, explorerErrors.ErrValidation:
-		status = http.StatusBadRequest
-	case explorerErrors.ErrNotFound, explorerErrors.ErrK8sResourceNotFound, explorerErrors.ErrHelmReleaseNotFound:
-		status = http.StatusNotFound
-	case explorerErrors.ErrServiceUnavailable, explorerErrors.ErrCacheNotInitialized, explorerErrors.ErrK8sClientNotInitialized:
-		status = http.StatusServiceUnavailable
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	response := map[string]any{
-		"error": explorerErr.Message,
-		"code":  explorerErr.Code.String(),
-	}
-	if explorerErr.Details != nil {
-		response["details"] = explorerErr.Details
-	}
-	json.NewEncoder(w).Encode(response)
 }
 
 // Debug handlers for event pipeline diagnostics

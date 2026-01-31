@@ -1,6 +1,36 @@
 // GitOps unified types and mappers for FluxCD and ArgoCD
 
 // ============================================================================
+// OPERATION RESPONSE TYPES
+// ============================================================================
+
+/** GitOps tool identifier */
+export type GitOpsTool = 'argocd' | 'fluxcd'
+
+/** GitOps operation types */
+export type GitOpsOperation = 'sync' | 'refresh' | 'terminate' | 'suspend' | 'resume' | 'reconcile'
+
+/** Reference to a GitOps resource */
+export interface GitOpsResourceRef {
+  kind: string
+  name: string
+  namespace: string
+}
+
+/**
+ * Standardized response format for all GitOps operations
+ * Returned by: sync, refresh, terminate, suspend, resume, reconcile endpoints
+ */
+export interface GitOpsOperationResponse {
+  message: string
+  operation: GitOpsOperation
+  tool: GitOpsTool
+  resource: GitOpsResourceRef
+  requestedAt?: string
+  source?: GitOpsResourceRef // For sync-with-source operations
+}
+
+// ============================================================================
 // STATUS TYPES
 // ============================================================================
 
@@ -51,8 +81,11 @@ export interface ManagedResource {
 // FLUX CONDITION TYPES
 // ============================================================================
 
+/** Known FluxCD condition types */
+export type FluxConditionType = 'Ready' | 'Reconciling' | 'Stalled' | 'Healthy'
+
 export interface FluxCondition {
-  type: string
+  type: FluxConditionType | string // Known types + allow unknown for forward compatibility
   status: 'True' | 'False' | 'Unknown'
   reason?: string
   message?: string
@@ -156,23 +189,52 @@ export function fluxConditionsToGitOpsStatus(
 // ARGO STATUS MAPPER
 // ============================================================================
 
+/** ArgoCD sync status values */
+export type ArgoSyncStatus = 'Synced' | 'OutOfSync' | 'Unknown'
+
+/** ArgoCD health status values */
+export type ArgoHealthStatus = 'Healthy' | 'Progressing' | 'Degraded' | 'Suspended' | 'Missing' | 'Unknown'
+
+/** ArgoCD operation phase values */
+export type ArgoOperationPhase = 'Running' | 'Succeeded' | 'Failed' | 'Error' | 'Terminating'
+
+/** ArgoCD sync result resource */
+export interface ArgoSyncResultResource {
+  group?: string
+  version?: string
+  kind: string
+  namespace?: string
+  name: string
+  status?: string
+  message?: string
+  hookPhase?: string
+}
+
+/** ArgoCD sync result source */
+export interface ArgoSyncResultSource {
+  repoURL?: string
+  path?: string
+  targetRevision?: string
+  chart?: string
+}
+
 export interface ArgoAppStatus {
   sync?: {
-    status?: string
+    status?: ArgoSyncStatus | string // Known types + allow unknown
     revision?: string
   }
   health?: {
-    status?: string
+    status?: ArgoHealthStatus | string // Known types + allow unknown
     message?: string
   }
   operationState?: {
-    phase?: string
+    phase?: ArgoOperationPhase | string // Known types + allow unknown
     message?: string
     finishedAt?: string
     syncResult?: {
       revision?: string
-      source?: any
-      resources?: any[]
+      source?: ArgoSyncResultSource
+      resources?: ArgoSyncResultResource[]
     }
   }
   reconciledAt?: string
@@ -243,39 +305,43 @@ export function argoStatusToGitOpsStatus(status: ArgoAppStatus): GitOpsStatus {
  * Flux inventory format: "namespace_name_group_kind"
  * Example: "default_my-config_core_ConfigMap" or "kube-system_coredns_apps_Deployment"
  * Note: group can be empty for core resources (e.g., "default_my-config__ConfigMap")
+ *
+ * Malformed entries are filtered out rather than returning invalid resources.
  */
 export function parseFluxInventory(entries: Array<{ id: string; v?: string }>): ManagedResource[] {
-  return entries.map(entry => {
-    // Format: namespace_name_group_kind
-    // The challenge is that namespace, name, and group can all contain underscores
-    // But the format is always: ns_name_group_kind where kind is the last part
-    const id = entry.id || ''
-    const parts = id.split('_')
+  return entries
+    .map(entry => {
+      // Format: namespace_name_group_kind
+      // The challenge is that namespace, name, and group can all contain underscores
+      // But the format is always: ns_name_group_kind where kind is the last part
+      const id = entry.id || ''
+      const parts = id.split('_')
 
-    if (parts.length < 4) {
-      // Fallback for malformed entries
-      return {
-        group: '',
-        kind: id,
-        namespace: '',
-        name: id,
+      // Minimum: namespace_name_group_kind (4 parts, though name could be empty which is invalid)
+      if (parts.length < 4) {
+        return null // Filter out malformed entries
       }
-    }
 
-    // Kind is always last, group is second-to-last
-    const kind = parts[parts.length - 1]
-    const group = parts[parts.length - 2]
-    // Namespace is first, name is everything in between
-    const namespace = parts[0]
-    const name = parts.slice(1, -2).join('_')
+      // Kind is always last, group is second-to-last
+      const kind = parts[parts.length - 1]
+      const group = parts[parts.length - 2]
+      // Namespace is first, name is everything in between
+      const namespace = parts[0]
+      const name = parts.slice(1, -2).join('_')
 
-    return {
-      group: group || '',
-      kind,
-      namespace,
-      name,
-    }
-  })
+      // Validate required fields
+      if (!kind || !name) {
+        return null // Filter out entries with missing required fields
+      }
+
+      return {
+        group: group || '',
+        kind,
+        namespace,
+        name,
+      }
+    })
+    .filter((r): r is ManagedResource => r !== null)
 }
 
 /**
@@ -289,10 +355,10 @@ export interface ArgoResource {
   namespace?: string
   name: string
   health?: {
-    status?: string
+    status?: ArgoHealthStatus | string // Known types + allow unknown
     message?: string
   }
-  status?: string
+  status?: ArgoSyncStatus | string // Known types + allow unknown
 }
 
 export function parseArgoResources(resources: ArgoResource[]): ManagedResource[] {
@@ -306,7 +372,8 @@ export function parseArgoResources(resources: ArgoResource[]): ManagedResource[]
   }))
 }
 
-function mapArgoHealth(status?: string): GitOpsHealthStatus | undefined {
+/** Maps an ArgoCD health status string to the unified GitOpsHealthStatus type */
+export function mapArgoHealth(status?: string): GitOpsHealthStatus | undefined {
   if (!status) return undefined
   switch (status) {
     case 'Healthy': return 'Healthy'

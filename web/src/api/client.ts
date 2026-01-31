@@ -22,6 +22,7 @@ import type {
   ArtifactHubSearchResult,
   ArtifactHubChartDetail,
 } from '../types'
+import type { GitOpsOperationResponse } from '../types/gitops'
 
 const API_BASE = '/api'
 
@@ -1159,148 +1160,132 @@ export function useArtifactHubChart(repoName: string, chartName: string, version
 }
 
 // ============================================================================
+// GitOps Mutation Factory
+// ============================================================================
+
+interface GitOpsMutationConfig<TVariables> {
+  getPath: (variables: TVariables) => string
+  errorMessage: string
+  successMessage: string
+  getInvalidateKeys: (variables: TVariables) => (string | undefined)[][]
+}
+
+/**
+ * Factory function for creating GitOps mutation hooks with consistent patterns.
+ * Handles fetch, error handling, meta messages, and query invalidation.
+ */
+function createGitOpsMutation<TVariables>(config: GitOpsMutationConfig<TVariables>) {
+  return function useGitOpsMutation() {
+    const queryClient = useQueryClient()
+    return useMutation<GitOpsOperationResponse, Error, TVariables>({
+      mutationFn: async (variables: TVariables): Promise<GitOpsOperationResponse> => {
+        const response = await fetch(`${API_BASE}${config.getPath(variables)}`, {
+          method: 'POST',
+        })
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(error.error || `HTTP ${response.status}`)
+        }
+        return response.json() as Promise<GitOpsOperationResponse>
+      },
+      meta: {
+        errorMessage: config.errorMessage,
+        successMessage: config.successMessage,
+      },
+      onSuccess: (_, variables) => {
+        config.getInvalidateKeys(variables).forEach(key =>
+          queryClient.invalidateQueries({ queryKey: key })
+        )
+      },
+    })
+  }
+}
+
+// Common variable types
+type FluxResourceVars = { kind: string; namespace: string; name: string }
+type ArgoAppVars = { namespace: string; name: string }
+
+// Standard invalidation patterns
+const fluxInvalidateKeys = (v: FluxResourceVars) => [
+  ['resources', v.kind],
+  ['resource', v.kind, v.namespace, v.name],
+]
+const argoInvalidateKeys = (v: ArgoAppVars) => [
+  ['resources', 'applications'],
+  ['resource', 'applications', v.namespace, v.name],
+]
+
+// ============================================================================
 // FluxCD API hooks
 // ============================================================================
 
-// Trigger reconciliation for a Flux resource
-export function useFluxReconcile() {
-  const queryClient = useQueryClient()
+export const useFluxReconcile = createGitOpsMutation<FluxResourceVars>({
+  getPath: (v) => `/flux/${v.kind}/${v.namespace}/${v.name}/reconcile`,
+  errorMessage: 'Failed to trigger reconciliation',
+  successMessage: 'Reconciliation triggered',
+  getInvalidateKeys: fluxInvalidateKeys,
+})
 
-  return useMutation({
-    mutationFn: async ({ kind, namespace, name }: { kind: string; namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/flux/${kind}/${namespace}/${name}/reconcile`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to trigger reconciliation',
-      successMessage: 'Reconciliation triggered',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', variables.kind] })
-      queryClient.invalidateQueries({ queryKey: ['resource', variables.kind, variables.namespace, variables.name] })
-    },
-  })
-}
+export const useFluxSuspend = createGitOpsMutation<FluxResourceVars>({
+  getPath: (v) => `/flux/${v.kind}/${v.namespace}/${v.name}/suspend`,
+  errorMessage: 'Failed to suspend resource',
+  successMessage: 'Resource suspended',
+  getInvalidateKeys: fluxInvalidateKeys,
+})
 
-// Suspend a Flux resource
-export function useFluxSuspend() {
-  const queryClient = useQueryClient()
+export const useFluxResume = createGitOpsMutation<FluxResourceVars>({
+  getPath: (v) => `/flux/${v.kind}/${v.namespace}/${v.name}/resume`,
+  errorMessage: 'Failed to resume resource',
+  successMessage: 'Resource resumed',
+  getInvalidateKeys: fluxInvalidateKeys,
+})
 
-  return useMutation({
-    mutationFn: async ({ kind, namespace, name }: { kind: string; namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/flux/${kind}/${namespace}/${name}/suspend`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to suspend resource',
-      successMessage: 'Resource suspended',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', variables.kind] })
-      queryClient.invalidateQueries({ queryKey: ['resource', variables.kind, variables.namespace, variables.name] })
-    },
-  })
-}
-
-// Resume a suspended Flux resource
-export function useFluxResume() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ kind, namespace, name }: { kind: string; namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/flux/${kind}/${namespace}/${name}/resume`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to resume resource',
-      successMessage: 'Resource resumed',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', variables.kind] })
-      queryClient.invalidateQueries({ queryKey: ['resource', variables.kind, variables.namespace, variables.name] })
-    },
-  })
-}
-
-// Sync with source - reconciles the source first, then the Kustomization/HelmRelease
-export function useFluxSyncWithSource() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ kind, namespace, name }: { kind: string; namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/flux/${kind}/${namespace}/${name}/sync-with-source`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to sync with source',
-      successMessage: 'Sync with source triggered',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', variables.kind] })
-      queryClient.invalidateQueries({ queryKey: ['resource', variables.kind, variables.namespace, variables.name] })
-      // Also invalidate source resources as they were reconciled too
-      queryClient.invalidateQueries({ queryKey: ['resources', 'gitrepositories'] })
-      queryClient.invalidateQueries({ queryKey: ['resources', 'ocirepositories'] })
-      queryClient.invalidateQueries({ queryKey: ['resources', 'helmrepositories'] })
-    },
-  })
-}
+export const useFluxSyncWithSource = createGitOpsMutation<FluxResourceVars>({
+  getPath: (v) => `/flux/${v.kind}/${v.namespace}/${v.name}/sync-with-source`,
+  errorMessage: 'Failed to sync with source',
+  successMessage: 'Sync with source triggered',
+  getInvalidateKeys: (v) => [
+    ...fluxInvalidateKeys(v),
+    // Also invalidate source resources as they were reconciled too
+    ['resources', 'gitrepositories'],
+    ['resources', 'ocirepositories'],
+    ['resources', 'helmrepositories'],
+  ],
+})
 
 // ============================================================================
 // ArgoCD API hooks
 // ============================================================================
 
-// Trigger sync for an ArgoCD Application
-export function useArgoSync() {
-  const queryClient = useQueryClient()
+export const useArgoSync = createGitOpsMutation<ArgoAppVars>({
+  getPath: (v) => `/argo/applications/${v.namespace}/${v.name}/sync`,
+  errorMessage: 'Failed to trigger sync',
+  successMessage: 'Sync initiated',
+  getInvalidateKeys: argoInvalidateKeys,
+})
 
-  return useMutation({
-    mutationFn: async ({ namespace, name }: { namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/argo/applications/${namespace}/${name}/sync`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to trigger sync',
-      successMessage: 'Sync initiated',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', 'applications'] })
-      queryClient.invalidateQueries({ queryKey: ['resource', 'applications', variables.namespace, variables.name] })
-    },
-  })
-}
+export const useArgoTerminate = createGitOpsMutation<ArgoAppVars>({
+  getPath: (v) => `/argo/applications/${v.namespace}/${v.name}/terminate`,
+  errorMessage: 'Failed to terminate sync',
+  successMessage: 'Sync terminated',
+  getInvalidateKeys: argoInvalidateKeys,
+})
 
-// Refresh an ArgoCD Application (re-read from git without syncing)
+export const useArgoSuspend = createGitOpsMutation<ArgoAppVars>({
+  getPath: (v) => `/argo/applications/${v.namespace}/${v.name}/suspend`,
+  errorMessage: 'Failed to suspend application',
+  successMessage: 'Application suspended',
+  getInvalidateKeys: argoInvalidateKeys,
+})
+
+export const useArgoResume = createGitOpsMutation<ArgoAppVars>({
+  getPath: (v) => `/argo/applications/${v.namespace}/${v.name}/resume`,
+  errorMessage: 'Failed to resume application',
+  successMessage: 'Application resumed',
+  getInvalidateKeys: argoInvalidateKeys,
+})
+
+// useArgoRefresh has a unique parameter (hard), so it's defined separately
 export function useArgoRefresh() {
   const queryClient = useQueryClient()
 
@@ -1319,84 +1304,6 @@ export function useArgoRefresh() {
     meta: {
       errorMessage: 'Failed to refresh application',
       successMessage: 'Application refreshed',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', 'applications'] })
-      queryClient.invalidateQueries({ queryKey: ['resource', 'applications', variables.namespace, variables.name] })
-    },
-  })
-}
-
-// Terminate an ongoing sync operation
-export function useArgoTerminate() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ namespace, name }: { namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/argo/applications/${namespace}/${name}/terminate`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to terminate sync',
-      successMessage: 'Sync terminated',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', 'applications'] })
-      queryClient.invalidateQueries({ queryKey: ['resource', 'applications', variables.namespace, variables.name] })
-    },
-  })
-}
-
-// Suspend an ArgoCD Application (disable automated sync)
-export function useArgoSuspend() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ namespace, name }: { namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/argo/applications/${namespace}/${name}/suspend`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to suspend application',
-      successMessage: 'Application suspended',
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['resources', 'applications'] })
-      queryClient.invalidateQueries({ queryKey: ['resource', 'applications', variables.namespace, variables.name] })
-    },
-  })
-}
-
-// Resume an ArgoCD Application (re-enable automated sync)
-export function useArgoResume() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({ namespace, name }: { namespace: string; name: string }) => {
-      const response = await fetch(`${API_BASE}/argo/applications/${namespace}/${name}/resume`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-        throw new Error(error.error || `HTTP ${response.status}`)
-      }
-      return response.json()
-    },
-    meta: {
-      errorMessage: 'Failed to resume application',
-      successMessage: 'Application resumed',
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['resources', 'applications'] })

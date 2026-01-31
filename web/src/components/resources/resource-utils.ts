@@ -1,6 +1,7 @@
 // Utility functions for resource display in tables
 
 import { formatCPUString, formatMemoryString } from '../../utils/format'
+import type { FluxCondition } from '../../types/gitops'
 
 // ============================================================================
 // STATUS & HEALTH UTILITIES
@@ -928,11 +929,15 @@ export function getCertificateExpiry(cert: any): { text: string; level: HealthLe
 // FLUXCD UTILITIES
 // ============================================================================
 
-export function getGitRepositoryStatus(gr: any): StatusBadge {
-  const conditions = gr.status?.conditions || []
-  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
+/**
+ * Generic status function for FluxCD resources that follow the standard Ready condition pattern.
+ * Works for: GitRepository, OCIRepository, HelmRepository, Alert
+ */
+export function getFluxResourceStatus(resource: any): StatusBadge {
+  const conditions: FluxCondition[] = resource.status?.conditions || []
+  const readyCondition = conditions.find((c) => c.type === 'Ready')
 
-  if (gr.spec?.suspend) {
+  if (resource.spec?.suspend) {
     return { text: 'Suspended', color: healthColors.degraded, level: 'degraded' }
   }
   if (readyCondition?.status === 'True') {
@@ -944,10 +949,19 @@ export function getGitRepositoryStatus(gr: any): StatusBadge {
   return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
 }
 
+// Aliases for specific resource types (all use the same logic)
+export const getGitRepositoryStatus = getFluxResourceStatus
+export const getOCIRepositoryStatus = getFluxResourceStatus
+export const getHelmRepositoryStatus = getFluxResourceStatus
+export const getFluxAlertStatus = getFluxResourceStatus
+
+/**
+ * Kustomization has additional Healthy condition check
+ */
 export function getKustomizationStatus(ks: any): StatusBadge {
-  const conditions = ks.status?.conditions || []
-  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
-  const healthyCondition = conditions.find((c: any) => c.type === 'Healthy')
+  const conditions: FluxCondition[] = ks.status?.conditions || []
+  const readyCondition = conditions.find((c) => c.type === 'Ready')
+  const healthyCondition = conditions.find((c) => c.type === 'Healthy')
 
   if (ks.spec?.suspend) {
     return { text: 'Suspended', color: healthColors.degraded, level: 'degraded' }
@@ -965,10 +979,13 @@ export function getKustomizationStatus(ks: any): StatusBadge {
   return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
 }
 
+/**
+ * HelmRelease has Released condition and remediation detection
+ */
 export function getFluxHelmReleaseStatus(hr: any): StatusBadge {
-  const conditions = hr.status?.conditions || []
-  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
-  const releasedCondition = conditions.find((c: any) => c.type === 'Released')
+  const conditions: FluxCondition[] = hr.status?.conditions || []
+  const readyCondition = conditions.find((c) => c.type === 'Ready')
+  const releasedCondition = conditions.find((c) => c.type === 'Released')
 
   if (hr.spec?.suspend) {
     return { text: 'Suspended', color: healthColors.degraded, level: 'degraded' }
@@ -986,54 +1003,6 @@ export function getFluxHelmReleaseStatus(hr: any): StatusBadge {
   }
   if (releasedCondition?.status === 'True') {
     return { text: 'Released', color: healthColors.healthy, level: 'healthy' }
-  }
-  return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
-}
-
-export function getOCIRepositoryStatus(repo: any): StatusBadge {
-  const conditions = repo.status?.conditions || []
-  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
-
-  if (repo.spec?.suspend) {
-    return { text: 'Suspended', color: healthColors.degraded, level: 'degraded' }
-  }
-  if (readyCondition?.status === 'True') {
-    return { text: 'Ready', color: healthColors.healthy, level: 'healthy' }
-  }
-  if (readyCondition?.status === 'False') {
-    return { text: 'Not Ready', color: healthColors.unhealthy, level: 'unhealthy' }
-  }
-  return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
-}
-
-export function getHelmRepositoryStatus(repo: any): StatusBadge {
-  const conditions = repo.status?.conditions || []
-  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
-
-  if (repo.spec?.suspend) {
-    return { text: 'Suspended', color: healthColors.degraded, level: 'degraded' }
-  }
-  if (readyCondition?.status === 'True') {
-    return { text: 'Ready', color: healthColors.healthy, level: 'healthy' }
-  }
-  if (readyCondition?.status === 'False') {
-    return { text: 'Not Ready', color: healthColors.unhealthy, level: 'unhealthy' }
-  }
-  return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
-}
-
-export function getFluxAlertStatus(alert: any): StatusBadge {
-  const conditions = alert.status?.conditions || []
-  const readyCondition = conditions.find((c: any) => c.type === 'Ready')
-
-  if (alert.spec?.suspend) {
-    return { text: 'Suspended', color: healthColors.degraded, level: 'degraded' }
-  }
-  if (readyCondition?.status === 'True') {
-    return { text: 'Ready', color: healthColors.healthy, level: 'healthy' }
-  }
-  if (readyCondition?.status === 'False') {
-    return { text: 'Not Ready', color: healthColors.unhealthy, level: 'unhealthy' }
   }
   return { text: 'Unknown', color: healthColors.unknown, level: 'unknown' }
 }
