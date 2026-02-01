@@ -12,7 +12,7 @@ Topology, event timeline, and service traffic — plus resource browsing, Helm m
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 
-Visualize your cluster topology, browse resources, stream logs, exec into pods, manage Helm releases, monitor GitOps workflows (FluxCD & ArgoCD), and forward ports — all from a single binary with zero cluster-side installation.
+Visualize your cluster topology, browse resources, stream logs, exec into pods, inspect container image filesystems, manage Helm releases, monitor GitOps workflows (FluxCD & ArgoCD), and forward ports — all from a single binary with zero cluster-side installation.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Radar Screenshot" width="800">
@@ -136,6 +136,22 @@ Table-based resource browser with smart columns per resource kind.
 - Browse all resource types including CRDs
 - Search by name, filter by status or problems (CrashLoopBackOff, ImagePullBackOff, etc.)
 - Click any resource for YAML manifest, related resources, logs, and events
+
+### Image Filesystem Viewer
+
+Inspect container image filesystems directly from the Pod view — no need to pull images locally or exec into containers.
+
+<p align="center">
+  <img src="docs/screenshots/image-filesystem-viewer.png" alt="Image Filesystem Viewer" width="800">
+  <br><em>Image Filesystem Viewer — Browse container image contents</em>
+</p>
+
+- Click any container image in a Pod to browse its complete filesystem
+- Tree view with file sizes, permissions, and symlink targets
+- Search files by name across the entire image
+- Download individual files for inspection
+- Works with public images (Docker Hub, Quay, GHCR) and private registries (GCR, ECR, ACR) using your cluster's ImagePullSecrets
+- Disk-based layer caching for fast repeated access
 
 ### Timeline
 
