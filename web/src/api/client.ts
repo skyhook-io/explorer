@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, skipToken } from '@tanstack/react-query'
 import type {
   Topology,
   ClusterInfo,
@@ -1221,5 +1221,61 @@ export function useSwitchContext() {
       queryClient.removeQueries()
       queryClient.invalidateQueries()
     },
+  })
+}
+
+// ============================================================================
+// Image Filesystem Inspection
+// ============================================================================
+
+import type { ImageFilesystem, ImageMetadata } from '../types'
+
+// Fetch image metadata (lightweight, checks if cached)
+export function useImageMetadata(
+  image: string,
+  namespace: string,
+  podName: string,
+  pullSecrets: string[],
+  enabled = true
+) {
+  const params = new URLSearchParams()
+  params.set('image', image)
+  if (namespace) params.set('namespace', namespace)
+  if (podName) params.set('pod', podName)
+  if (pullSecrets.length > 0) params.set('pullSecrets', pullSecrets.join(','))
+
+  return useQuery<ImageMetadata>({
+    queryKey: ['image-metadata', image, namespace, podName, pullSecrets.join(',')],
+    queryFn: () => fetchJSON(`/images/metadata?${params.toString()}`),
+    enabled: enabled && Boolean(image),
+    staleTime: 60000, // 1 minute - metadata is lightweight
+    retry: false,
+  })
+}
+
+// Fetch full image filesystem (downloads layers if not cached)
+export function useImageFilesystem(
+  image: string,
+  namespace: string,
+  podName: string,
+  pullSecrets: string[],
+  enabled = true
+) {
+  const params = new URLSearchParams()
+  params.set('image', image)
+  if (namespace) params.set('namespace', namespace)
+  if (podName) params.set('pod', podName)
+  if (pullSecrets.length > 0) params.set('pullSecrets', pullSecrets.join(','))
+
+  const shouldFetch = enabled && Boolean(image)
+
+  return useQuery<ImageFilesystem>({
+    queryKey: ['image-filesystem', image, namespace, podName, pullSecrets.join(',')],
+    // Use skipToken to completely prevent the query from running when disabled
+    queryFn: shouldFetch
+      ? () => fetchJSON(`/images/inspect?${params.toString()}`)
+      : skipToken,
+    staleTime: 300000, // 5 minutes - image content doesn't change
+    retry: false, // Don't retry on auth errors
   })
 }

@@ -633,3 +633,51 @@ export interface TrafficFilters {
 
 // Main view type now includes 'traffic'
 export type ExtendedMainView = MainView | 'traffic'
+
+// ============================================================================
+// Image Filesystem Types
+// ============================================================================
+
+// File or directory node in image filesystem
+export interface FileNode {
+  name: string
+  path: string
+  type: 'file' | 'dir' | 'symlink'
+  size?: number
+  permissions?: string
+  mode?: number
+  modTime?: string
+  linkTarget?: string
+  children?: FileNode[]
+}
+
+// Image layer information
+export interface LayerInfo {
+  digest: string
+  size: number
+  mediaType: string
+}
+
+// Complete image filesystem response
+export interface ImageFilesystem {
+  image: string
+  digest?: string
+  platform?: string
+  root: FileNode
+  totalFiles: number
+  totalSize: number
+  layers?: LayerInfo[]
+  error?: string
+}
+
+// Lightweight image metadata (for pre-download check)
+export interface ImageMetadata {
+  image: string
+  digest: string
+  platform: string
+  totalSize: number    // Total compressed size of all layers
+  layerCount: number
+  cached: boolean      // Whether filesystem is already cached
+  filesystem?: ImageFilesystem  // Included if cached
+  authMethod: string   // "anonymous", "google", "credentials", etc.
+}

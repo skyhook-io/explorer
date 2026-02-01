@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Server, HardDrive, Terminal as TerminalIcon, FileText, AlertTriangle, Activity } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Section, PropertyList, Property, ConditionsSection, CopyHandler } from '../drawer-components'
@@ -8,6 +9,7 @@ import { Tooltip } from '../../ui/Tooltip'
 import { useCanExec, useCanViewLogs, useCanPortForward } from '../../../contexts/CapabilitiesContext'
 import { usePodMetrics, usePodMetricsHistory } from '../../../api/client'
 import { MetricsChart } from '../../ui/MetricsChart'
+import { ImageFilesystemModal } from '../ImageFilesystemModal'
 
 interface PodRendererProps {
   data: any
@@ -102,6 +104,10 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
   // Check for problems
   const problems = getPodProblems(data)
   const hasProblems = problems.length > 0
+
+  // Image filesystem modal state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const imagePullSecrets = data.spec?.imagePullSecrets?.map((s: { name: string }) => s.name) || []
 
   const handleOpenTerminal = (containerName?: string) => {
     const container = containerName || containers[0]?.name
@@ -231,7 +237,13 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
                   </div>
                 </div>
                 <div className="text-xs text-theme-text-secondary space-y-1">
-                  <div className="truncate" title={container.image}>Image: {container.image}</div>
+                  <button
+                    className="truncate text-blue-400 hover:text-blue-300 hover:underline text-left w-full"
+                    title="Click to view filesystem"
+                    onClick={() => setSelectedImage(container.image)}
+                  >
+                    Image: {container.image}
+                  </button>
                   {restarts > 0 && (
                     <div className={restarts > 5 ? 'text-red-400' : 'text-yellow-400'}>
                       Restarts: {restarts}
@@ -392,6 +404,18 @@ export function PodRenderer({ data, onCopy, copied }: PodRendererProps) {
 
       {/* Conditions */}
       <ConditionsSection conditions={data.status?.conditions} />
+
+      {/* Image Filesystem Modal */}
+      {selectedImage && (
+        <ImageFilesystemModal
+          open={!!selectedImage}
+          onClose={() => setSelectedImage(null)}
+          image={selectedImage}
+          namespace={namespace || ''}
+          podName={podName || ''}
+          pullSecrets={imagePullSecrets}
+        />
+      )}
     </>
   )
 }
