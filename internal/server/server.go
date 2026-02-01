@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 
 	"github.com/skyhook-io/radar/internal/helm"
+	"github.com/skyhook-io/radar/internal/images"
 	"github.com/skyhook-io/radar/internal/k8s"
 	"github.com/skyhook-io/radar/internal/timeline"
 	"github.com/skyhook-io/radar/internal/topology"
@@ -152,6 +153,10 @@ func (s *Server) setupRoutes() {
 		// Helm routes
 		helmHandlers := helm.NewHandlers()
 		helmHandlers.RegisterRoutes(r)
+
+		// Image inspection routes
+		imageHandlers := images.NewHandlers()
+		imageHandlers.RegisterRoutes(r)
 
 		// FluxCD routes
 		r.Post("/flux/{kind}/{namespace}/{name}/reconcile", s.handleFluxReconcile)
