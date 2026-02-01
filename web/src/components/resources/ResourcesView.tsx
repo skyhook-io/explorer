@@ -539,7 +539,9 @@ const KNOWN_COLUMNS: Record<string, Column[]> = {
     { key: 'source', label: 'Source', width: 'w-48', tooltip: 'Source GitRepository or OCIRepository' },
     { key: 'path', label: 'Path', width: 'w-36', hideOnMobile: true },
     { key: 'status', label: 'Status', width: 'w-24' },
+    { key: 'revision', label: 'Revision', width: 'w-48', hideOnMobile: true, tooltip: 'Applied git revision' },
     { key: 'inventory', label: 'Resources', width: 'w-24', tooltip: 'Number of managed resources' },
+    { key: 'lastUpdated', label: 'Last Updated', width: 'w-28', tooltip: 'Time since last successful reconciliation' },
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
   helmreleases: [
@@ -549,6 +551,7 @@ const KNOWN_COLUMNS: Record<string, Column[]> = {
     { key: 'version', label: 'Version', width: 'w-24' },
     { key: 'status', label: 'Status', width: 'w-24' },
     { key: 'revision', label: 'Rev', width: 'w-16', hideOnMobile: true, tooltip: 'Helm release revision number' },
+    { key: 'lastUpdated', label: 'Last Updated', width: 'w-28', tooltip: 'Time since last successful reconciliation' },
     { key: 'age', label: 'Age', width: 'w-20' },
   ],
   alerts: [
@@ -3229,11 +3232,35 @@ function KustomizationCell({ resource, column }: { resource: any; column: string
         </span>
       )
     }
+    case 'revision': {
+      const revision = resource.status?.lastAppliedRevision || resource.status?.lastAttemptedRevision || ''
+      if (!revision) return <span className="text-sm text-theme-text-tertiary">-</span>
+      // Format: "refs/heads/main@sha1:abc123..." -> "main@abc123"
+      const formatted = revision
+        .replace(/^refs\/heads\//, '')
+        .replace(/^refs\/tags\//, '')
+        .replace(/@sha1:([a-f0-9]{8})[a-f0-9]*$/, '@$1')
+      return (
+        <Tooltip content={revision}>
+          <span className="text-sm text-theme-text-secondary font-mono truncate block">{formatted}</span>
+        </Tooltip>
+      )
+    }
     case 'inventory': {
       const count = getKustomizationInventory(resource)
       return (
         <span className="text-sm text-theme-text-secondary">
           {count > 0 ? count : '-'}
+        </span>
+      )
+    }
+    case 'lastUpdated': {
+      // Kustomization uses history[0].lastReconciled or conditions[Ready].lastTransitionTime
+      const lastReconcile = resource.status?.history?.[0]?.lastReconciled ||
+        resource.status?.conditions?.find((c: any) => c.type === 'Ready')?.lastTransitionTime
+      return (
+        <span className="text-sm text-theme-text-secondary">
+          {lastReconcile ? formatAge(lastReconcile) : '-'}
         </span>
       )
     }
@@ -3269,6 +3296,16 @@ function FluxHelmReleaseCell({ resource, column }: { resource: any; column: stri
       return (
         <span className="text-sm text-theme-text-tertiary">
           {revision > 0 ? `#${revision}` : '-'}
+        </span>
+      )
+    }
+    case 'lastUpdated': {
+      // HelmRelease uses history[0].lastDeployed or conditions[Ready].lastTransitionTime
+      const lastReconcile = resource.status?.history?.[0]?.lastDeployed ||
+        resource.status?.conditions?.find((c: any) => c.type === 'Ready')?.lastTransitionTime
+      return (
+        <span className="text-sm text-theme-text-secondary">
+          {lastReconcile ? formatAge(lastReconcile) : '-'}
         </span>
       )
     }

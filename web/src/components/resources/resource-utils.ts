@@ -1139,7 +1139,8 @@ export function getFluxHelmReleaseVersion(hr: any): string {
 }
 
 export function getFluxHelmReleaseRevision(hr: any): number {
-  return hr.status?.lastAttemptedRevision || hr.status?.lastAppliedRevision || 0
+  // Helm release revision number is in history[0].version
+  return hr.status?.history?.[0]?.version || 0
 }
 
 export function getFluxAlertProvider(alert: any): string {
