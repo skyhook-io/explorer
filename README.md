@@ -141,6 +141,11 @@ Table-based resource browser with smart columns per resource kind.
 
 Inspect container image filesystems directly from the Pod view — no need to pull images locally or exec into containers.
 
+<p align="center">
+  <img src="docs/screenshots/image-filesystem-viewer.png" alt="Image Filesystem Viewer" width="800">
+  <br><em>Image Filesystem Viewer — Browse container image contents</em>
+</p>
+
 - Click any container image in a Pod to browse its complete filesystem
 - Tree view with file sizes, permissions, and symlink targets
 - Search files by name across the entire image
