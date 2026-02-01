@@ -16,6 +16,16 @@ interface UseEventSourceOptions {
 
 const MAX_EVENTS = 100 // Keep last 100 events
 
+// Dynamic throttle based on cluster size - fast for small, protective for large
+function getTopologyThrottleMs(nodeCount: number): number {
+  if (nodeCount < 100) return 500    // Small clusters: 0.5s
+  if (nodeCount < 300) return 1000   // Medium clusters: 1s
+  if (nodeCount < 500) return 2000   // Large clusters: 2s
+  return 3000                         // Very large clusters: 3s
+}
+const INITIAL_RECONNECT_DELAY_MS = 3000
+const MAX_RECONNECT_DELAY_MS = 30000 // Cap at 30 seconds
+
 export function useEventSource(
   namespace: string,
   viewMode: ViewMode = 'resources',
@@ -27,6 +37,13 @@ export function useEventSource(
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectTimeoutRef = useRef<number | null>(null)
   const waitingForTopologyAfterSwitch = useRef(false)
+  const reconnectDelayRef = useRef(INITIAL_RECONNECT_DELAY_MS) // Exponential backoff
+
+  // Throttling state for topology updates
+  const lastTopologyUpdateRef = useRef<number>(0)
+  const pendingTopologyRef = useRef<Topology | null>(null)
+  const throttleTimeoutRef = useRef<number | null>(null)
+  const currentNodeCountRef = useRef<number>(0) // Track node count for dynamic throttle
 
   // Use ref to avoid stale closures while not triggering reconnection on callback changes
   const optionsRef = useRef(options)
@@ -58,6 +75,8 @@ export function useEventSource(
     es.onopen = () => {
       console.log('SSE connected')
       setConnected(true)
+      // Reset backoff on successful connection
+      reconnectDelayRef.current = INITIAL_RECONNECT_DELAY_MS
     }
 
     es.onerror = (error) => {
@@ -65,22 +84,58 @@ export function useEventSource(
       setConnected(false)
       es.close()
 
-      // Reconnect after 3 seconds
+      // Reconnect with exponential backoff
+      const delay = reconnectDelayRef.current
       reconnectTimeoutRef.current = window.setTimeout(() => {
-        console.log('SSE reconnecting...')
+        console.log(`SSE reconnecting after ${delay}ms...`)
         connect()
-      }, 3000)
+      }, delay)
+      // Increase delay for next attempt (exponential backoff with cap)
+      reconnectDelayRef.current = Math.min(delay * 1.5, MAX_RECONNECT_DELAY_MS)
     }
 
-    // Handle topology updates
+    // Handle topology updates with dynamic throttling based on cluster size
     es.addEventListener('topology', (event) => {
       try {
         const data = JSON.parse(event.data) as Topology
-        setTopology(data)
-        // If we were waiting for topology after a context switch, signal completion
+        const now = Date.now()
+        const timeSinceLastUpdate = now - lastTopologyUpdateRef.current
+
+        // Update node count for dynamic throttle calculation
+        currentNodeCountRef.current = data.nodes?.length || 0
+        const throttleMs = getTopologyThrottleMs(currentNodeCountRef.current)
+
+        // If waiting for topology after context switch, update immediately
         if (waitingForTopologyAfterSwitch.current) {
           waitingForTopologyAfterSwitch.current = false
+          lastTopologyUpdateRef.current = now
+          setTopology(data)
           optionsRef.current?.onContextSwitchComplete?.()
+          return
+        }
+
+        // Throttle updates: if we updated recently, queue this update
+        if (timeSinceLastUpdate < throttleMs) {
+          pendingTopologyRef.current = data
+
+          // Schedule update for when throttle period ends (if not already scheduled)
+          if (!throttleTimeoutRef.current) {
+            const delay = throttleMs - timeSinceLastUpdate
+            throttleTimeoutRef.current = window.setTimeout(() => {
+              throttleTimeoutRef.current = null
+              if (pendingTopologyRef.current) {
+                lastTopologyUpdateRef.current = Date.now()
+                currentNodeCountRef.current = pendingTopologyRef.current.nodes?.length || 0
+                setTopology(pendingTopologyRef.current)
+                pendingTopologyRef.current = null
+              }
+            }, delay)
+          }
+        } else {
+          // Enough time has passed, update immediately
+          lastTopologyUpdateRef.current = now
+          pendingTopologyRef.current = null
+          setTopology(data)
         }
       } catch (e) {
         console.error('Failed to parse topology:', e)
@@ -146,6 +201,9 @@ export function useEventSource(
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
+      }
+      if (throttleTimeoutRef.current) {
+        clearTimeout(throttleTimeoutRef.current)
       }
     }
   }, [connect])

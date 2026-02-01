@@ -1,33 +1,6 @@
 import type { Node } from '@xyflow/react'
-import ELK from 'elkjs/lib/elk.bundled.js'
 import type { TopologyNode, GroupingMode, NodeKind } from '../../types'
 import { NODE_DIMENSIONS } from './K8sResourceNode'
-
-const elk = new ELK()
-
-// ELK options for laying out nodes within a single group
-const elkOptionsGroup = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'RIGHT',
-  'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-  'elk.spacing.nodeNode': '40',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '85',
-  'elk.layered.spacing.edgeNodeBetweenLayers': '25',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-}
-
-// ELK options for positioning groups based on inter-group connections
-// Groups are treated as single nodes, edges represent cross-group connections
-const elkOptionsGroupLayout = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'RIGHT',
-  'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-  'elk.spacing.nodeNode': '80',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '120',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-}
 
 // Group padding - space for header + internal spacing (must account for border)
 // Top padding accommodates the header at its largest (when zoomed out)
@@ -45,6 +18,81 @@ const GROUP_PADDING_NO_HEADER = {
   left: 30,
   bottom: 30,
   right: 30,
+}
+
+// Worker instance management
+let layoutWorker: Worker | null = null
+let requestIdCounter = 0
+const pendingRequests = new Map<number, {
+  resolve: (result: WorkerLayoutResult) => void
+  reject: (error: Error) => void
+}>()
+
+interface WorkerLayoutResult {
+  groupLayouts: Array<{
+    groupId: string
+    groupKey: string
+    width: number
+    height: number
+    children: Array<{ id: string; x: number; y: number }>
+    isCollapsed: boolean
+  }>
+  ungroupedNodes: Array<{
+    id: string
+    width: number
+    height: number
+  }>
+  groupPositions: Array<[string, { x: number; y: number }]>
+  error?: string
+}
+
+function getLayoutWorker(): Worker {
+  if (!layoutWorker) {
+    // Use URL constructor for better Vite compatibility with workers
+    layoutWorker = new Worker(new URL('./layout.worker.ts', import.meta.url), { type: 'module' })
+    layoutWorker.onmessage = (e: MessageEvent) => {
+      const { requestId, ...result } = e.data
+      const pending = pendingRequests.get(requestId)
+      if (pending) {
+        pendingRequests.delete(requestId)
+        if (result.error) {
+          pending.reject(new Error(result.error))
+        } else {
+          pending.resolve(result as WorkerLayoutResult)
+        }
+      }
+    }
+    layoutWorker.onerror = (e) => {
+      console.error('Layout worker error:', e)
+      // Reject all pending requests
+      for (const [, pending] of pendingRequests) {
+        pending.reject(new Error('Worker error'))
+      }
+      pendingRequests.clear()
+    }
+  }
+  return layoutWorker
+}
+
+function runLayoutInWorker(
+  elkGraph: ElkGraph,
+  groupingMode: GroupingMode,
+  hideGroupHeader: boolean,
+  padding: typeof GROUP_PADDING
+): Promise<WorkerLayoutResult> {
+  return new Promise((resolve, reject) => {
+    const worker = getLayoutWorker()
+    const requestId = ++requestIdCounter
+    pendingRequests.set(requestId, { resolve, reject })
+    worker.postMessage({
+      type: 'layout',
+      requestId,
+      elkGraph,
+      groupingMode,
+      hideGroupHeader,
+      padding,
+    })
+  })
 }
 
 interface ElkNode {
@@ -67,15 +115,6 @@ interface ElkGraph {
   layoutOptions: Record<string, string>
   children: ElkNode[]
   edges: ElkEdge[]
-}
-
-interface ElkLayoutResult {
-  id: string
-  x?: number
-  y?: number
-  width?: number
-  height?: number
-  children?: ElkLayoutResult[]
 }
 
 // Get app label from a node (if it has one)
@@ -405,6 +444,7 @@ export function buildHierarchicalElkGraph(
 }
 
 // Two-phase layout: first layout groups internally, then position groups based on connections
+// Layout is performed in a Web Worker to avoid blocking the main thread
 export async function applyHierarchicalLayout(
   elkGraph: ElkGraph,
   topologyNodes: TopologyNode[],
@@ -417,172 +457,21 @@ export async function applyHierarchicalLayout(
   try {
     const padding = hideGroupHeader ? GROUP_PADDING_NO_HEADER : GROUP_PADDING
 
-    // Phase 1: Layout each group independently and collect their sizes
-    const groupLayouts: Array<{
-      groupId: string
-      groupKey: string
-      width: number
-      height: number
-      children: ElkLayoutResult[]
-      isCollapsed: boolean
-    }> = []
+    // Run layout in worker (off main thread)
+    const workerResult = await runLayoutInWorker(elkGraph, groupingMode, hideGroupHeader, padding)
 
-    const ungroupedNodes: Array<{
-      id: string
-      width: number
-      height: number
-    }> = []
-
-    // Build a set of node IDs in each group for edge filtering
-    const groupNodeIds = new Map<string, Set<string>>()
-
-    for (const child of elkGraph.children) {
-      const isGroup = child.id.startsWith('group-')
-
-      if (isGroup && child.children && child.children.length > 0) {
-        const groupKey = child.id.replace(`group-${groupingMode}-`, '')
-        const minWidth = hideGroupHeader ? 300 : Math.max(500, groupKey.length * 16 + 200)
-
-        // Track node IDs in this group
-        const nodeIds = new Set(child.children.map(c => c.id))
-        groupNodeIds.set(child.id, nodeIds)
-
-        // Layout this group independently with only intra-group edges
-        const intraGroupEdges = elkGraph.edges.filter(e =>
-          nodeIds.has(e.sources[0]) && nodeIds.has(e.targets[0])
-        )
-
-        const groupGraph: ElkGraph = {
-          id: child.id,
-          layoutOptions: {
-            ...elkOptionsGroup,
-            'elk.padding': `[left=${padding.left}, top=${padding.top}, right=${padding.right}, bottom=${padding.bottom}]`,
-          },
-          children: child.children,
-          edges: intraGroupEdges,
-        }
-
-        const layoutResult = await elk.layout(groupGraph) as ElkLayoutResult
-
-        const finalWidth = hideGroupHeader
-          ? (layoutResult.width || 300)
-          : Math.max(layoutResult.width || 300, minWidth)
-
-        groupLayouts.push({
-          groupId: child.id,
-          groupKey,
-          width: finalWidth,
-          height: layoutResult.height || 200,
-          children: layoutResult.children || [],
-          isCollapsed: false,
-        })
-      } else if (isGroup) {
-        // Collapsed group
-        const groupKey = child.id.replace(`group-${groupingMode}-`, '')
-        const minWidth = Math.max(400, groupKey.length * 16 + 180)
-        groupLayouts.push({
-          groupId: child.id,
-          groupKey,
-          width: Math.max(child.width || 280, minWidth),
-          height: child.height || 90,
-          children: [],
-          isCollapsed: true,
-        })
-      } else {
-        // Ungrouped node
-        ungroupedNodes.push({
-          id: child.id,
-          width: child.width || 200,
-          height: child.height || 56,
-        })
-      }
+    if (workerResult.error) {
+      return { nodes: [], positions: new Map(), error: workerResult.error }
     }
 
-    // Phase 2: Build a meta-graph of groups and use ELK to position them
-    // based on inter-group connections
-    const nodeToGroup = new Map<string, string>()
-    for (const [groupId, nodeIds] of groupNodeIds) {
-      for (const nodeId of nodeIds) {
-        nodeToGroup.set(nodeId, groupId)
-      }
-    }
+    // Build position map from worker result
+    const groupPositions = new Map<string, { x: number; y: number }>(workerResult.groupPositions)
 
-    // Find inter-group edges (edges where source and target are in different groups)
-    const interGroupEdges: ElkEdge[] = []
-    const seenInterGroupEdges = new Set<string>()
-
-    for (const edge of elkGraph.edges) {
-      const sourceGroup = nodeToGroup.get(edge.sources[0])
-      const targetGroup = nodeToGroup.get(edge.targets[0])
-
-      // Edge crosses groups if both are in groups but different ones
-      if (sourceGroup && targetGroup && sourceGroup !== targetGroup) {
-        const edgeKey = `${sourceGroup}->${targetGroup}`
-        if (!seenInterGroupEdges.has(edgeKey)) {
-          seenInterGroupEdges.add(edgeKey)
-          interGroupEdges.push({
-            id: `inter-${edgeKey}`,
-            sources: [sourceGroup],
-            targets: [targetGroup],
-          })
-        }
-      }
-      // Edge from ungrouped to group or vice versa
-      else if ((!sourceGroup && targetGroup) || (sourceGroup && !targetGroup)) {
-        const source = sourceGroup || edge.sources[0]
-        const target = targetGroup || edge.targets[0]
-        const edgeKey = `${source}->${target}`
-        if (!seenInterGroupEdges.has(edgeKey)) {
-          seenInterGroupEdges.add(edgeKey)
-          interGroupEdges.push({
-            id: `inter-${edgeKey}`,
-            sources: [source],
-            targets: [target],
-          })
-        }
-      }
-    }
-
-    // Build meta-graph: groups and ungrouped nodes as children
-    const metaChildren: ElkNode[] = []
-
-    for (const group of groupLayouts) {
-      metaChildren.push({
-        id: group.groupId,
-        width: group.width,
-        height: group.height,
-      })
-    }
-
-    for (const node of ungroupedNodes) {
-      metaChildren.push({
-        id: node.id,
-        width: node.width,
-        height: node.height,
-      })
-    }
-
-    // Layout the meta-graph to position groups
-    const metaGraph: ElkGraph = {
-      id: 'meta-root',
-      layoutOptions: elkOptionsGroupLayout,
-      children: metaChildren,
-      edges: interGroupEdges,
-    }
-
-    const metaLayoutResult = await elk.layout(metaGraph) as ElkLayoutResult
-
-    // Build position map from meta-layout
-    const groupPositions = new Map<string, { x: number; y: number }>()
-    for (const child of metaLayoutResult.children || []) {
-      groupPositions.set(child.id, { x: child.x || 0, y: child.y || 0 })
-    }
-
-    // Phase 3: Build ReactFlow nodes using positions from both phases
+    // Build ReactFlow nodes using positions from worker
     const nodes: Node[] = []
     const positions = new Map<string, { x: number; y: number }>()
 
-    for (const group of groupLayouts) {
+    for (const group of workerResult.groupLayouts) {
       const pos = groupPositions.get(group.groupId) || { x: 0, y: 0 }
       const memberIds = groupMap.get(group.groupKey) || []
 
@@ -612,14 +501,14 @@ export async function applyHierarchicalLayout(
       for (const child of group.children) {
         const topoNode = topologyNodes.find(n => n.id === child.id)
         if (topoNode) {
-          const absX = pos.x + (child.x || 0)
-          const absY = pos.y + (child.y || 0)
+          const absX = pos.x + child.x
+          const absY = pos.y + child.y
           positions.set(child.id, { x: absX, y: absY })
 
           nodes.push({
             id: child.id,
             type: 'k8sResource',
-            position: { x: child.x || 0, y: child.y || 0 },
+            position: { x: child.x, y: child.y },
             parentId: group.groupId,
             extent: 'parent',
             data: {
@@ -635,7 +524,7 @@ export async function applyHierarchicalLayout(
     }
 
     // Add ungrouped nodes
-    for (const node of ungroupedNodes) {
+    for (const node of workerResult.ungroupedNodes) {
       const pos = groupPositions.get(node.id) || { x: 0, y: 0 }
       const topoNode = topologyNodes.find(n => n.id === node.id)
       if (topoNode) {

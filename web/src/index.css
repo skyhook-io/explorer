@@ -230,6 +230,58 @@ body {
   box-shadow: var(--topology-node-shadow);
 }
 
+/* Status bar via pseudo-element (saves one DOM element per node) */
+.topology-node-status-bar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 4px 0 0 4px;
+}
+.topology-node-status-healthy::before {
+  background-color: rgb(34 197 94); /* green-500 */
+}
+.topology-node-status-unknown::before {
+  background-color: rgb(100 116 139); /* slate-500 */
+}
+
+/* CSS-based topology icons (replaces Lucide SVGs - saves ~4000 DOM elements) */
+.topology-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+.topology-icon-internet { background: #3b82f6; border-radius: 50%; }
+.topology-icon-ingress { background: #8b5cf6; }
+.topology-icon-service { background: #3b82f6; border-radius: 50%; }
+.topology-icon-deployment { background: #10b981; }
+.topology-icon-rollout { background: #10b981; }
+.topology-icon-daemonset { background: #14b8a6; }
+.topology-icon-statefulset { background: #06b6d4; }
+.topology-icon-replicaset { background: #22c55e; }
+.topology-icon-pod { background: #84cc16; border-radius: 50%; }
+.topology-icon-podgroup { background: #84cc16; border-radius: 50%; }
+.topology-icon-configmap { background: #f59e0b; }
+.topology-icon-secret { background: #ef4444; }
+.topology-icon-hpa { background: #ec4899; }
+.topology-icon-job { background: #a855f7; }
+.topology-icon-cronjob { background: #a855f7; }
+.topology-icon-pvc { background: #06b6d4; }
+.topology-icon-namespace { background: #6366f1; }
+.topology-icon-application { background: #f97316; }
+.topology-icon-kustomization { background: #0ea5e9; }
+.topology-icon-helmrelease { background: #0ea5e9; }
+.topology-icon-gitrepository { background: #14b8a6; }
+
 /* Background dots - uses CSS variable for theme awareness */
 .react-flow__background pattern circle {
   fill: var(--topology-bg-dots) !important;
@@ -240,6 +292,13 @@ body {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+/* Group header scaling using CSS variable set by ViewportController */
+/* This avoids React re-renders on zoom changes */
+.group-header-scaled {
+  transform: scale(var(--group-header-scale, 1));
+  transform-origin: top left;
 }
 
 .react-flow__edge-path {

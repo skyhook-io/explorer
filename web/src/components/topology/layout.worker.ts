@@ -1,0 +1,272 @@
+/**
+ * Web Worker for ELK layout calculations.
+ * Moves expensive layout operations off the main thread.
+ *
+ * We use elk-api.js which doesn't spawn its own worker - we ARE the worker.
+ * The algorithms run synchronously here but off the main thread.
+ */
+import ELK from 'elkjs/lib/elk-api.js'
+import elkWorkerAlgorithm from 'elkjs/lib/elk-worker.min.js?url'
+
+// Create ELK with explicit worker URL (runs the algorithm in our worker context)
+const elk = new ELK({
+  workerUrl: elkWorkerAlgorithm,
+})
+
+// ELK options for laying out nodes within a single group
+const elkOptionsGroup = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+  'elk.spacing.nodeNode': '40',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '85',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '25',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+}
+
+// ELK options for positioning groups based on inter-group connections
+const elkOptionsGroupLayout = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'RIGHT',
+  'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+  'elk.spacing.nodeNode': '80',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '120',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+}
+
+interface ElkNode {
+  id: string
+  width?: number
+  height?: number
+  children?: ElkNode[]
+  layoutOptions?: Record<string, string>
+  labels?: Array<{ text: string }>
+}
+
+interface ElkEdge {
+  id: string
+  sources: string[]
+  targets: string[]
+}
+
+interface ElkGraph {
+  id: string
+  layoutOptions: Record<string, string>
+  children: ElkNode[]
+  edges: ElkEdge[]
+}
+
+interface ElkLayoutResult {
+  id: string
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  children?: ElkLayoutResult[]
+}
+
+interface GroupPadding {
+  top: number
+  left: number
+  bottom: number
+  right: number
+}
+
+interface LayoutRequest {
+  type: 'layout'
+  requestId: number
+  elkGraph: ElkGraph
+  groupingMode: string
+  hideGroupHeader: boolean
+  padding: GroupPadding
+}
+
+interface GroupLayoutResult {
+  groupId: string
+  groupKey: string
+  width: number
+  height: number
+  children: Array<{ id: string; x: number; y: number }>
+  isCollapsed: boolean
+}
+
+interface UngroupedNodeResult {
+  id: string
+  width: number
+  height: number
+}
+
+interface LayoutResponse {
+  type: 'layout-result'
+  requestId: number
+  groupLayouts: GroupLayoutResult[]
+  ungroupedNodes: UngroupedNodeResult[]
+  groupPositions: Array<[string, { x: number; y: number }]>
+  error?: string
+}
+
+self.onmessage = async (e: MessageEvent<LayoutRequest>) => {
+  const { type, requestId, elkGraph, groupingMode, hideGroupHeader, padding } = e.data
+
+  if (type !== 'layout') return
+
+  try {
+    const groupLayouts: GroupLayoutResult[] = []
+    const ungroupedNodes: UngroupedNodeResult[] = []
+
+    // Build a set of node IDs in each group for edge filtering
+    const groupNodeIds = new Map<string, Set<string>>()
+
+    // Phase 1: Layout each group independently
+    for (const child of elkGraph.children) {
+      const isGroup = child.id.startsWith('group-')
+
+      if (isGroup && child.children && child.children.length > 0) {
+        const groupKey = child.id.replace(`group-${groupingMode}-`, '')
+        const minWidth = hideGroupHeader ? 300 : Math.max(500, groupKey.length * 16 + 200)
+
+        // Track node IDs in this group
+        const nodeIds = new Set(child.children.map(c => c.id))
+        groupNodeIds.set(child.id, nodeIds)
+
+        // Layout this group independently with only intra-group edges
+        const intraGroupEdges = elkGraph.edges.filter(e =>
+          nodeIds.has(e.sources[0]) && nodeIds.has(e.targets[0])
+        )
+
+        const groupGraph: ElkGraph = {
+          id: child.id,
+          layoutOptions: {
+            ...elkOptionsGroup,
+            'elk.padding': `[left=${padding.left}, top=${padding.top}, right=${padding.right}, bottom=${padding.bottom}]`,
+          },
+          children: child.children,
+          edges: intraGroupEdges,
+        }
+
+        const layoutResult = await elk.layout(groupGraph) as ElkLayoutResult
+
+        const finalWidth = hideGroupHeader
+          ? (layoutResult.width || 300)
+          : Math.max(layoutResult.width || 300, minWidth)
+
+        groupLayouts.push({
+          groupId: child.id,
+          groupKey,
+          width: finalWidth,
+          height: layoutResult.height || 200,
+          children: (layoutResult.children || []).map(c => ({
+            id: c.id,
+            x: c.x || 0,
+            y: c.y || 0,
+          })),
+          isCollapsed: false,
+        })
+      } else if (isGroup) {
+        // Collapsed group
+        const groupKey = child.id.replace(`group-${groupingMode}-`, '')
+        const minWidth = Math.max(400, groupKey.length * 16 + 180)
+        groupLayouts.push({
+          groupId: child.id,
+          groupKey,
+          width: Math.max(child.width || 280, minWidth),
+          height: child.height || 90,
+          children: [],
+          isCollapsed: true,
+        })
+      } else {
+        // Ungrouped node
+        ungroupedNodes.push({
+          id: child.id,
+          width: child.width || 200,
+          height: child.height || 56,
+        })
+      }
+    }
+
+    // Phase 2: Build meta-graph and position groups
+    const nodeToGroup = new Map<string, string>()
+    for (const [groupId, nodeIds] of groupNodeIds) {
+      for (const nodeId of nodeIds) {
+        nodeToGroup.set(nodeId, groupId)
+      }
+    }
+
+    // Find inter-group edges
+    const interGroupEdges: ElkEdge[] = []
+    const seenInterGroupEdges = new Set<string>()
+
+    for (const edge of elkGraph.edges) {
+      const sourceGroup = nodeToGroup.get(edge.sources[0])
+      const targetGroup = nodeToGroup.get(edge.targets[0])
+
+      if (sourceGroup && targetGroup && sourceGroup !== targetGroup) {
+        const edgeKey = `${sourceGroup}->${targetGroup}`
+        if (!seenInterGroupEdges.has(edgeKey)) {
+          seenInterGroupEdges.add(edgeKey)
+          interGroupEdges.push({
+            id: `inter-${edgeKey}`,
+            sources: [sourceGroup],
+            targets: [targetGroup],
+          })
+        }
+      } else if ((!sourceGroup && targetGroup) || (sourceGroup && !targetGroup)) {
+        const source = sourceGroup || edge.sources[0]
+        const target = targetGroup || edge.targets[0]
+        const edgeKey = `${source}->${target}`
+        if (!seenInterGroupEdges.has(edgeKey)) {
+          seenInterGroupEdges.add(edgeKey)
+          interGroupEdges.push({
+            id: `inter-${edgeKey}`,
+            sources: [source],
+            targets: [target],
+          })
+        }
+      }
+    }
+
+    // Build and layout meta-graph
+    const metaChildren: ElkNode[] = [
+      ...groupLayouts.map(g => ({ id: g.groupId, width: g.width, height: g.height })),
+      ...ungroupedNodes.map(n => ({ id: n.id, width: n.width, height: n.height })),
+    ]
+
+    const metaGraph: ElkGraph = {
+      id: 'meta-root',
+      layoutOptions: elkOptionsGroupLayout,
+      children: metaChildren,
+      edges: interGroupEdges,
+    }
+
+    const metaLayoutResult = await elk.layout(metaGraph) as ElkLayoutResult
+
+    // Build position map
+    const groupPositions: Array<[string, { x: number; y: number }]> = []
+    for (const child of metaLayoutResult.children || []) {
+      groupPositions.push([child.id, { x: child.x || 0, y: child.y || 0 }])
+    }
+
+    const response: LayoutResponse = {
+      type: 'layout-result',
+      requestId,
+      groupLayouts,
+      ungroupedNodes,
+      groupPositions,
+    }
+
+    self.postMessage(response)
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    const response: LayoutResponse = {
+      type: 'layout-result',
+      requestId,
+      groupLayouts: [],
+      ungroupedNodes: [],
+      groupPositions: [],
+      error: `Layout failed: ${errorMessage}`,
+    }
+    self.postMessage(response)
+  }
+}

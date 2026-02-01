@@ -4,7 +4,6 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -19,7 +18,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
-import { AlertTriangle, RotateCw } from 'lucide-react'
+import { AlertTriangle, RotateCw, Scissors } from 'lucide-react'
 
 import { K8sResourceNode } from './K8sResourceNode'
 import { GroupNode } from './GroupNode'
@@ -43,38 +42,26 @@ function getEdgeColor(type: string, isTrafficView: boolean): string {
   return EDGE_COLORS[type as keyof typeof EDGE_COLORS] || '#64748b'
 }
 
-function getNodeColor(kind: string): string {
-  switch (kind) {
-    case 'Internet':
-      return '#6366f1'
-    case 'Ingress':
-      return '#8b5cf6'
-    case 'Service':
-      return '#3b82f6'
-    case 'Deployment':
-    case 'Rollout':
-      return '#10b981'
-    case 'DaemonSet':
-      return '#14b8a6'
-    case 'StatefulSet':
-      return '#06b6d4'
-    case 'ReplicaSet':
-      return '#22c55e'
-    case 'Pod':
-      return '#84cc16'
-    case 'ConfigMap':
-      return '#f59e0b'
-    case 'Secret':
-      return '#ef4444'
-    case 'HPA':
-      return '#ec4899'
-    case 'group':
-      return '#4f46e5'
-    default:
-      return '#64748b'
+// Memoized edge style cache to avoid creating new objects on every render
+const edgeStyleCache = new Map<string, React.CSSProperties>()
+
+function getEdgeStyle(type: string, isTrafficView: boolean, isTrafficEdge: boolean, animated: boolean): React.CSSProperties {
+  const cacheKey = `${type}-${isTrafficView}-${isTrafficEdge}-${animated}`
+  let style = edgeStyleCache.get(cacheKey)
+  if (!style) {
+    const edgeColor = getEdgeColor(type, isTrafficView)
+    style = {
+      stroke: edgeColor,
+      strokeWidth: isTrafficView ? 2 : 1.5,
+      strokeDasharray: isTrafficView && isTrafficEdge && animated ? '5 5' : undefined,
+    }
+    edgeStyleCache.set(cacheKey, style)
   }
+  return style
 }
 
+// Threshold for disabling edge animations (performance optimization)
+const EDGE_ANIMATION_THRESHOLD = 200
 
 // Build edges, handling collapsed groups
 function buildEdges(
@@ -83,10 +70,14 @@ function buildEdges(
   groupMap: Map<string, string[]>,
   groupingMode: GroupingMode,
   isTrafficView: boolean,
-  nodeToGroup?: Map<string, string>
+  nodeToGroup?: Map<string, string>,
+  nodeCount?: number
 ): Edge[] {
   const edges: Edge[] = []
   const seenEdgeIds = new Set<string>() // O(1) duplicate detection
+
+  // Disable animations for large graphs (performance optimization)
+  const enableAnimations = (nodeCount ?? 0) < EDGE_ANIMATION_THRESHOLD
 
   // Build reverse lookup if not provided
   const nodeGroupMap = nodeToGroup || new Map<string, string>()
@@ -125,24 +116,21 @@ function buildEdges(
 
     const edgeColor = getEdgeColor(edge.type, isTrafficView)
     const isTrafficEdge = edge.type === 'routes-to' || edge.type === 'exposes'
+    const animated = enableAnimations && isTrafficView && isTrafficEdge
 
     edges.push({
       id: edgeId,
       source,
       target,
       type: 'smoothstep',
-      animated: isTrafficView && isTrafficEdge,
+      animated,
       markerEnd: {
         type: MarkerType.ArrowClosed,
         color: edgeColor,
         width: 12,
         height: 12,
       },
-      style: {
-        stroke: edgeColor,
-        strokeWidth: isTrafficView ? 2 : 1.5,
-        strokeDasharray: isTrafficView && isTrafficEdge ? '5 5' : undefined,
-      },
+      style: getEdgeStyle(edge.type, isTrafficView, isTrafficEdge, animated),
     })
   }
 
@@ -442,14 +430,15 @@ export function TopologyGraph({
 
       setNodes(nodesWithHandlers)
 
-      // Build edges with styling
+      // Build edges with styling (pass node count for animation threshold)
       const builtEdges = buildEdges(
         workingEdges,
         collapsedGroups,
         groupMap,
         groupingMode,
         isTrafficView,
-        nodeToGroup
+        nodeToGroup,
+        nodesWithHandlers.length
       )
       setEdges(builtEdges)
     })
@@ -480,17 +469,27 @@ export function TopologyGraph({
     [topology, workingNodes, onNodeClick]
   )
 
-  // Update selected state
+  // Update selected state - only update nodes that actually changed
   useEffect(() => {
-    setNodes(nds =>
-      nds.map(node => ({
-        ...node,
-        data: {
-          ...node.data,
-          selected: node.id === selectedNodeId,
-        },
-      }))
-    )
+    setNodes(nds => {
+      let changed = false
+      const updated = nds.map(node => {
+        const shouldBeSelected = node.id === selectedNodeId
+        const isCurrentlySelected = node.data?.selected ?? false
+        if (shouldBeSelected !== isCurrentlySelected) {
+          changed = true
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              selected: shouldBeSelected,
+            },
+          }
+        }
+        return node // Return same reference if unchanged
+      })
+      return changed ? updated : nds // Return same array if nothing changed
+    })
   }, [selectedNodeId, setNodes])
 
   if (!topology || topology.nodes.length === 0) {
@@ -535,8 +534,23 @@ export function TopologyGraph({
 
   return (
     <ReactFlowProvider>
+      {/* Truncation banner - shown when topology has too many nodes */}
+      {topology?.truncated && (
+        <div className="absolute top-2 left-2 right-2 z-10 bg-blue-500/10 border border-blue-500/30 rounded-lg p-2 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <Scissors className="w-4 h-4 text-blue-400 shrink-0" />
+            <div className="text-sm">
+              <span className="font-medium text-blue-400">Large cluster:</span>
+              <span className="text-theme-text-secondary ml-1">
+                Showing {topology.nodes.length} of {topology.totalNodes} nodes.
+                Select a namespace for better performance.
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Warning banner for partial topology data */}
-      {topology?.warnings && topology.warnings.length > 0 && (
+      {topology?.warnings && topology.warnings.length > 0 && !topology.truncated && (
         <div className="absolute top-2 left-2 right-2 z-10 bg-amber-500/10 border border-amber-500/30 rounded-lg p-2 backdrop-blur-sm">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
@@ -586,16 +600,12 @@ export function TopologyGraph({
         minZoom={0.1}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
+        onlyRenderVisibleElements
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#334155" />
         <Controls
           className="bg-theme-surface border border-theme-border rounded-lg"
           showInteractive={false}
-        />
-        <MiniMap
-          className="bg-theme-surface border border-theme-border rounded-lg"
-          nodeColor={(node) => getNodeColor(node.data?.kind as string || node.data?.type as string || '')}
-          maskColor="rgba(15, 23, 42, 0.8)"
         />
         <ViewportController structureKey={structureKey} />
       </ReactFlow>
@@ -614,8 +624,9 @@ function ViewportController({ structureKey }: { structureKey: string }) {
   const prevStructureKeyRef = useRef<string>('')
   const prevNodesLengthRef = useRef(0)
 
-  // Update CSS variable for header offset based on zoom
+  // Update CSS variables for header offset and scale based on zoom
   // This allows child nodes to move up when header shrinks (zoomed in)
+  // and allows GroupNode to use CSS var instead of useViewport() (prevents re-renders)
   const updateZoomOffset = useCallback((viewport: Viewport) => {
     const { zoom } = viewport
     // Match the headerScale formula from GroupNode
@@ -623,6 +634,7 @@ function ViewportController({ structureKey }: { structureKey: string }) {
     // At scale 1.0, offset is 0. At scale 0.35, offset is ~45px (header shrinks by ~45px)
     const headerOffset = (1 - headerScale) * 70
     document.documentElement.style.setProperty('--group-header-offset', `${-headerOffset}px`)
+    document.documentElement.style.setProperty('--group-header-scale', String(headerScale))
   }, [])
 
   // Use ReactFlow's viewport change hook instead of polling

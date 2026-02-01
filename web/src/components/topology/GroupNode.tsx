@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { NodeProps, Handle, Position, useViewport } from '@xyflow/react'
+import { NodeProps, Handle, Position } from '@xyflow/react'
 import { ChevronDown, ChevronRight, Box, Tag } from 'lucide-react'
 
 interface GroupNodeData {
@@ -87,13 +87,6 @@ export const GroupNode = memo(function GroupNode({
 
   const Icon = getIcon()
 
-  // Get viewport zoom to scale header adaptively
-  // At low zoom (zoomed out), keep headers large for readability
-  // At high zoom (zoomed in), reduce header size so it's not comically large
-  // Start scaling down at zoom 0.5 for earlier reduction when zooming in
-  const { zoom } = useViewport()
-  const headerScale = Math.max(0.35, Math.min(1, 0.5 / zoom))
-
   // When collapsed, render as a compact card
   if (collapsed) {
     return (
@@ -105,9 +98,9 @@ export const GroupNode = memo(function GroupNode({
         />
 
         <div
-          className="rounded-xl p-4 cursor-pointer transition-all"
+          className="rounded-xl p-4 cursor-pointer group-header-scaled"
           onClick={() => onToggleCollapse(id)}
-          style={{ transform: `scale(${headerScale})`, transformOrigin: 'top left', ...getBorderStyle(), ...getHeaderBgStyle() }}
+          style={{ ...getBorderStyle(), ...getHeaderBgStyle() }}
         >
           <div className="flex items-center gap-4">
             <ChevronRight className="w-8 h-8" style={getIconStyle()} />
@@ -142,57 +135,47 @@ export const GroupNode = memo(function GroupNode({
       />
 
       {/* Container with border - use explicit dimensions from props */}
-      {/* Top position adjusts based on zoom to keep border tight around content */}
+      {/* Top position adjusts based on CSS variable set by ViewportController */}
       <div
-        className="absolute left-0 rounded-xl box-border isolate overflow-hidden bg-theme-surface/40"
+        className="absolute left-0 rounded-xl box-border isolate overflow-hidden bg-theme-surface/40 group-container-adjusted"
         style={{
           width: width || '100%',
-          height: `calc(${height || '100%'}px - ${60 * (1 - headerScale)}px)`,
-          top: `${60 * (1 - headerScale)}px`,
+          height: height || '100%',
           ...getBorderStyle()
         }}
       >
-        {/* Header bar - content scales based on zoom level for readability */}
+        {/* Header bar - uses CSS transform for zoom scaling (avoids React re-renders) */}
         {/* Hidden when hideHeader is true (single namespace view) */}
         {!hideHeader && (
           <div
-            className="flex items-center cursor-pointer"
+            className="flex items-center cursor-pointer group-header-scaled"
             onClick={() => onToggleCollapse(id)}
             style={{
-              padding: `${20 * headerScale}px ${24 * headerScale}px`,
-              gap: `${16 * headerScale}px`,
+              padding: '20px 24px',
+              gap: '16px',
               ...getHeaderBgStyle()
             }}
           >
             <ChevronDown
-              className="shrink-0"
-              style={{ width: 32 * headerScale, height: 32 * headerScale, ...getIconStyle() }}
+              className="shrink-0 w-8 h-8"
+              style={getIconStyle()}
             />
             <Icon
-              className="shrink-0"
-              style={{ width: 36 * headerScale, height: 36 * headerScale, ...getIconStyle() }}
+              className="shrink-0 w-9 h-9"
+              style={getIconStyle()}
             />
             <span
-              className="font-bold truncate"
-              style={{ fontSize: 36 * headerScale, ...getLabelStyle() }}
+              className="font-bold truncate text-4xl"
+              style={getLabelStyle()}
             >
               {name}
             </span>
             {label && (
-              <span
-                className="text-theme-text-secondary truncate"
-                style={{ fontSize: 14 * headerScale }}
-              >
+              <span className="text-sm text-theme-text-secondary truncate">
                 ({label})
               </span>
             )}
-            <span
-              className="ml-auto shrink-0 font-semibold text-theme-text-secondary bg-theme-surface/60 rounded-xl"
-              style={{
-                fontSize: 20 * headerScale,
-                padding: `${8 * headerScale}px ${16 * headerScale}px`
-              }}
-            >
+            <span className="ml-auto shrink-0 font-semibold text-xl text-theme-text-secondary bg-theme-surface/60 rounded-xl px-4 py-2">
               {nodeCount}
             </span>
           </div>
